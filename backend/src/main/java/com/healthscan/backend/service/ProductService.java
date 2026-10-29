@@ -28,6 +28,7 @@ public class ProductService {
     }
 
     public ProductResponse analyzeProduct(String barcode, String lang) {
+        AiAnalyzeResponse aiRes = null;
         Product product = repo.findByBarcode(barcode).orElse(null);
         if (product == null) {
             try {
@@ -53,7 +54,6 @@ public class ProductService {
                         ? List.of()
                         : Arrays.asList(ingredients.split(","));
 
-                AiAnalyzeResponse aiRes = null;
                 // Forward to AI service (skip if no ingredients)
                 if (!ingredientList.isEmpty()) {
                     try {
@@ -88,7 +88,9 @@ public class ProductService {
                 aiRes != null ? aiRes.getProductName() : product.getName(),
                 aiRes != null ? aiRes.getOrigin() : "",
                 aiRes != null ? aiRes.getIngredients() : null,
-                aiRes != null ? aiRes.getNutrition() : "");
+                aiRes != null ? aiRes.getNutrition() : "",
+                aiRes != null ? aiRes.getPros() : null,
+                aiRes != null ? aiRes.getCons() : null);
     }
 }
 

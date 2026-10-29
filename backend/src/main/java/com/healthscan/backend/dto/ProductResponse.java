@@ -11,16 +11,20 @@ public class ProductResponse {
     private String origin;
     private java.util.List<String> ingredients;
     private String nutrition;
+    private java.util.List<String> pros;
+    private java.util.List<String> cons;
 
     public ProductResponse() {}
     public ProductResponse(String barcode, String name, String imageUrl, String ingredientsText, Integer healthScore, String explanation) {
-        this(barcode, name, imageUrl, ingredientsText, healthScore, explanation, name, "", null, "");
+        this(barcode, name, imageUrl, ingredientsText, healthScore, explanation, name, "", null, "", null, null);
     }
     public ProductResponse(String barcode, String name, String imageUrl, String ingredientsText, Integer healthScore, String explanation,
-                           String productName, String origin, java.util.List<String> ingredients, String nutrition) {
+                           String productName, String origin, java.util.List<String> ingredients, String nutrition,
+                           java.util.List<String> pros, java.util.List<String> cons) {
         this.barcode = barcode; this.name = name; this.imageUrl = imageUrl; this.ingredientsText = ingredientsText;
         this.healthScore = healthScore; this.explanation = explanation;
         this.productName = productName; this.origin = origin; this.ingredients = ingredients; this.nutrition = nutrition;
+        this.pros = pros; this.cons = cons;
     }
     public String getBarcode() { return barcode; }
     public void setBarcode(String barcode) { this.barcode = barcode; }
@@ -42,4 +46,8 @@ public class ProductResponse {
     public void setIngredients(java.util.List<String> ingredients) { this.ingredients = ingredients; }
     public String getNutrition() { return nutrition; }
     public void setNutrition(String nutrition) { this.nutrition = nutrition; }
+    public java.util.List<String> getPros() { return pros; }
+    public void setPros(java.util.List<String> pros) { this.pros = pros; }
+    public java.util.List<String> getCons() { return cons; }
+    public void setCons(java.util.List<String> cons) { this.cons = cons; }
 }
