@@ -5,5 +5,14 @@
   "orientation": "portrait",
   "userInterfaceStyle": "automatic",
   "platforms": ["ios", "android", "web"],
-  "plugins": ["expo-status-bar"]
+  "plugins": [
+    "expo-status-bar",
+    [
+      "expo-image-picker",
+      {
+        "photosPermission": "Allow Health Scan to access your photos.",
+        "cameraPermission": "Allow Health Scan to access your camera."
+      }
+    ]
+  ]
 }
