@@ -179,6 +179,8 @@ export default function App() {
             <BlurView intensity={40} tint={dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
             <Text style={[styles.cardTitle, { color: text }]}>🤖 AI Ανάλυση</Text>
             <Text style={[styles.summaryText, { color: sub }]}>{result.explanation || result.summary || "—"}</Text>
+            {result.origin ? <Text style={[styles.barcodeText, { color: sub }]}>Origin: {result.origin}</Text> : null}
+            {result.nutrition ? <Text style={[styles.summaryText, { color: sub }]}>Nutrition: {result.nutrition}</Text> : null}
           </View>
 
           <View style={[styles.card, { backgroundColor: glass }]}>
@@ -192,7 +194,12 @@ export default function App() {
 
           <View style={[styles.card, { backgroundColor: glass }]}>
             <BlurView intensity={40} tint={dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
-            <Text style={[styles.sectionTitle, { color: text }]}>⚠️ Αρνητικά / Πρόσθετα</Text>
+            <Text style={[styles.sectionTitle, { color: text }]}>📋 Ingredients</Text>
+            {(result.ingredients || []).length === 0 && <Text style={[styles.emptyText, { color: sub }]}>—</Text>}
+            {(result.ingredients || []).map((p, i) => (
+              <Text key={i} style={styles.proItem}>• {p}</Text>
+            ))}
+          </View>
             {(result.cons || []).length === 0 && <Text style={[styles.emptyText, { color: sub }]}>—</Text>}
             {(result.cons || []).map((c, i) => (
               <Text key={i} style={styles.conItem}>• {c}</Text>
