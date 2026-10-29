@@ -1,0 +1,9 @@
+{
+  "name": "health-scan-mobile",
+  "slug": "health-scan-mobile",
+  "version": "1.0.0",
+  "orientation": "portrait",
+  "userInterfaceStyle": "automatic",
+  "platforms": ["ios", "android", "web"],
+  "plugins": ["expo-status-bar"]
+}
