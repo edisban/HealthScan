@@ -1,0 +1,9 @@
+{
+  "name": "health-scan",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "cd mobile && npx expo start --port 8085 --lan",
+    "start:tunnel": "cd mobile && npx expo start --tunnel --port 8085"
+  }
+}
