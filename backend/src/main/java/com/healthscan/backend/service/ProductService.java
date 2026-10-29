@@ -9,8 +9,6 @@ import com.healthscan.backend.entity.Product;
 import com.healthscan.backend.repository.ProductRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
-import reactor.core.publisher.Mono;
 
 import java.util.Arrays;
 import java.util.List;
@@ -58,8 +56,12 @@ public class ProductService {
                 if (!ingredientList.isEmpty()) {
                     try {
                         AiAnalyzeRequest aiReq = new AiAnalyzeRequest(barcode, product.getName(), ingredientList, lang);
+                        String envUrl = System.getenv("AI_SERVICE_URL");
+                        String aiUrl = (envUrl == null || envUrl.isBlank())
+                                ? "http://localhost:8000/analyze"
+                                : envUrl;
                         aiRes = webClient.post()
-                                .uri(System.getenv().getOrDefault("AI_SERVICE_URL", "http://localhost:8000/analyze"))
+                                .uri(aiUrl)
                                 .bodyValue(aiReq)
                                 .retrieve()
                                 .bodyToMono(AiAnalyzeResponse.class)
