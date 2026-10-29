@@ -1,23 +1,17 @@
-# Health Scan Mobile
+# Health Scan
 
 Health Scan is a mobile app that scans product barcodes and uses AI to analyze their nutritional health value.
 
-React Native (Expo) app for scanning product barcodes and viewing an AI-based nutritional health analysis.
-
 ## Stack
-- Expo SDK 58 / React Native 0.88
-- React 19
-- expo-camera (barcode scanning)
-- expo-blur, expo-linear-gradient
-- Backend API at `http://192.168.1.1:8080` (`/api/v1/product/{barcode}`)
+- Frontend: React Native (Expo SDK 58), React 19, expo-camera, expo-blur, expo-linear-gradient
+- Backend: Spring Boot (Java), PostgreSQL, WebClient
+- AI/ML: FastAPI (Python), Groq LLM API (OpenAI-compatible), model `openai/gpt-oss-20b`
+- Infra: Docker Compose (postgres, backend, ai-service)
 
-## Features
-- Barcode scanning via camera (EAN-13, EAN-8, UPC-A, UPC-E, Code128)
-- Manual barcode entry
-- Product image, name, and health score gauge
-- AI explanation, positive ingredients, negatives/additives
-## Architecture
-- Single-screen app (`App.js`): state managed with React hooks (dark mode, camera permission, scan/result/loading/error).
-- `fetchProduct` calls the backend REST endpoint and stores the JSON response in `result`.
-- Camera modal with `CameraView` and `onBarcodeScanned`; manual input fallback.
-- UI built with `LinearGradient`, `BlurView`, and `StyleSheet`; no navigation library.
+## How the AI/ML works
+1. Mobile scans a barcode and calls `GET /api/v1/product/{barcode}?lang=el|en`.
+2. Backend fetches product data (name, image, ingredients) from Open Food Facts.
+3. Backend forwards ingredients to the AI service (`POST /analyze`).
+4. AI service builds a prompt and calls the Groq LLM, which returns a JSON payload: health score (0-100%), explanation, pros, cons, product name, origin, ingredients, nutrition.
+5. Backend responds with clean JSON; missing data falls back to defaults instead of 500.
+6. Mobile renders the score gauge, explanation, pros, and cons in the selected language.
