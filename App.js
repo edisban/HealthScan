@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Image, ScrollView,
-  ActivityIndicator, TextInput, Modal, Animated, Switch, SafeAreaView,
+  ActivityIndicator, TextInput, Modal, Animated, Switch,
 } from "react-native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -74,11 +74,11 @@ export default function App() {
   const bg = dark ? ["#1e1b4b", "#312e81"] : ["#eef2ff", "#f8fafc"];
   const text = dark ? "#f1f5f9" : "#1a1a2e";
   const sub = dark ? "#94a3b8" : "#666";
-
   const glass = dark ? "rgba(30,41,59,0.6)" : "rgba(255,255,255,0.6)";
 
   return (
     <LinearGradient colors={bg} style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.title, { color: text }]}>Health Scan</Text>
         <View style={styles.toggleRow}>
@@ -91,6 +91,7 @@ export default function App() {
       </View>
       <Text style={[styles.subtitle, { color: sub }]}>Σάρωσε ένα προϊόν και δες τη διατροφική του αξία</Text>
 
+      {/* Main Screen Content */}
       {!result && !loading && !error && (
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
           <TouchableOpacity style={styles.scanCard} onPress={() => setShowScanner(true)}>
@@ -98,7 +99,7 @@ export default function App() {
               <Text style={styles.scanIcon}>📷</Text>
               <Text style={styles.scanTitle}>Άνοιγμα Κάμερας</Text>
               <Text style={styles.scanSub}>Σάρωση Barcode</Text>
-    </LinearGradient>
+            </LinearGradient>
           </TouchableOpacity>
 
           <View style={[styles.card, { backgroundColor: glass }]}>
@@ -135,6 +136,7 @@ export default function App() {
         </ScrollView>
       )}
 
+      {/* Loading State */}
       {loading && (
         <View style={styles.center}>
           <ActivityIndicator size="large" color="#6366f1" />
@@ -142,6 +144,7 @@ export default function App() {
         </View>
       )}
 
+      {/* Error State */}
       {error && (
         <View style={[styles.errorCard, { backgroundColor: dark ? "rgba(220,38,38,0.2)" : "#fdecea" }]}>
           <Text style={styles.errorText}>{error}</Text>
@@ -151,8 +154,10 @@ export default function App() {
         </View>
       )}
 
+      {/* Result Display */}
       {result && (
         <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+          {/* Main Product Info */}
           <View style={[styles.card, { backgroundColor: glass }]}>
             <BlurView intensity={40} tint={dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
             {result.imageUrl ? (
@@ -175,6 +180,7 @@ export default function App() {
             </View>
           </View>
 
+          {/* AI Analysis */}
           <View style={[styles.card, { backgroundColor: glass }]}>
             <BlurView intensity={40} tint={dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
             <Text style={[styles.cardTitle, { color: text }]}>🤖 AI Ανάλυση</Text>
@@ -183,26 +189,33 @@ export default function App() {
             {result.nutrition ? <Text style={[styles.summaryText, { color: sub }]}>Nutrition: {result.nutrition}</Text> : null}
           </View>
 
+          {/* Pros */}
           <View style={[styles.card, { backgroundColor: glass }]}>
             <BlurView intensity={40} tint={dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
             <Text style={[styles.sectionTitle, { color: text }]}>✅ Θετικά Συστατικά</Text>
             {(result.pros || []).length === 0 && <Text style={[styles.emptyText, { color: sub }]}>—</Text>}
             {(result.pros || []).map((p, i) => (
-              <Text key={i} style={styles.proItem}>• {p}</Text>
+              <Text key={i} style={styles.proItem}>{p}</Text>
             ))}
           </View>
 
+          {/* Ingredients */}
           <View style={[styles.card, { backgroundColor: glass }]}>
             <BlurView intensity={40} tint={dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
             <Text style={[styles.sectionTitle, { color: text }]}>📋 Ingredients</Text>
             {(result.ingredients || []).length === 0 && <Text style={[styles.emptyText, { color: sub }]}>—</Text>}
             {(result.ingredients || []).map((p, i) => (
-              <Text key={i} style={styles.proItem}>• {p}</Text>
+              <Text key={i} style={styles.proItem}>{p}</Text>
             ))}
           </View>
+
+          {/* Cons */}
+          <View style={[styles.card, { backgroundColor: glass }]}>
+            <BlurView intensity={40} tint={dark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+            <Text style={[styles.sectionTitle, { color: text }]}>⚠️ Αρνητικά / Πρόσθετα</Text>
             {(result.cons || []).length === 0 && <Text style={[styles.emptyText, { color: sub }]}>—</Text>}
             {(result.cons || []).map((c, i) => (
-              <Text key={i} style={styles.conItem}>• {c}</Text>
+              <Text key={i} style={styles.conItem}>{c}</Text>
             ))}
           </View>
 
@@ -212,6 +225,7 @@ export default function App() {
         </ScrollView>
       )}
 
+      {/* Camera Scanner Modal */}
       <Modal visible={showScanner} animationType="slide" onRequestClose={() => setShowScanner(false)}>
         <View style={styles.modalContainer}>
           <Text style={styles.modalTitle}>Σάρωση Barcode</Text>
@@ -242,6 +256,8 @@ export default function App() {
           </TouchableOpacity>
         </View>
       </Modal>
+
+      {/* Footer */}
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: "#94a3b8" }]}>Health Scan (c) 2026</Text>
       </View>
@@ -298,5 +314,6 @@ const styles = StyleSheet.create({
   scanHint: { marginTop: 12, color: "#fff", fontWeight: "600" },
   closeBtn: { marginTop: 16, backgroundColor: "#e74c3c", padding: 12, borderRadius: 12, alignItems: "center" },
   closeBtnText: { color: "#fff", fontWeight: "700" },
-  footer: { paddingVertical: 12, alignItems: 'center' },
-  footerText: { fontSize: 12 } })
+  footer: { paddingVertical: 12, alignItems: "center" },
+  footerText: { fontSize: 12 },
+});
