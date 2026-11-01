@@ -8,6 +8,7 @@ export interface UseImageAnalysisReturn {
   loading: boolean;
   error: string | null;
   pickImage: () => Promise<void>;
+  takePhoto: () => Promise<void>;
   analyzeUri: (uri: string) => Promise<void>;
   reset: () => void;
 }
@@ -25,6 +26,22 @@ export const useImageAnalysis = (): UseImageAnalysisReturn => {
     }
     const pickerResult = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
+    const uri = pickerResult.assets[0].uri;
+    await analyzeUri(uri);
+  }, []);
+
+  const takePhoto = useCallback(async () => {
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (permissionResult.granted !== true) {
+      setError("Camera permission required");
+      return;
+    }
+    const pickerResult = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
@@ -56,5 +73,5 @@ export const useImageAnalysis = (): UseImageAnalysisReturn => {
     setError(null);
   }, []);
 
-  return { result, loading, error, pickImage, analyzeUri, reset };
+  return { result, loading, error, pickImage, takePhoto, analyzeUri, reset };
 };

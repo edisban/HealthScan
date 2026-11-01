@@ -7,364 +7,540 @@ import {
   StyleSheet,
   Image,
   Modal,
-  Animated,
   ActivityIndicator,
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import { Button, Input, Card, Gauge } from "@/components/ui";
+import { Ionicons } from "@expo/vector-icons";
+import { Button, IconButton, Input, Card, Gauge, Chip, Background } from "@/components/ui";
 import { useTheme } from "@/context/ThemeContext";
 import { useLanguage } from "@/context/LanguageContext";
 import { useProduct } from "@/hooks/useProduct";
 import { useCamera } from "@/hooks/useCamera";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
+import type { AppStrings } from "@/constants/strings";
+import type { Theme } from "@/constants/theme";
+
+type IconName = keyof typeof Ionicons.glyphMap;
 
 export const HomeScreen = () => {
   const { theme, isDark, toggleTheme } = useTheme();
-  const { lang, strings } = useLanguage();
+  const { lang, setLang, strings } = useLanguage();
   const { granted } = useCamera();
   const { result, loading, error, fetchProduct, reset } = useProduct(lang);
-  const { result: imageResult, loading: imageLoading, error: imageError, pickImage, reset: resetImage } = useImageAnalysis();
+  const {
+    result: imageResult,
+    loading: imageLoading,
+    error: imageError,
+    pickImage,
+    takePhoto,
+    reset: resetImage,
+  } = useImageAnalysis();
   const [manualBarcode, setManualBarcode] = useState("");
   const [showScanner, setShowScanner] = useState(false);
-  const [scanned, setScanned] = useState(false);
+  const [showPhotoSource, setShowPhotoSource] = useState(false);
+  const { text } = theme.palette;
 
-  const bgColors = theme.palette.background.default as unknown as readonly [string, string];
-  const gradientColors = ["#6366f1", "#4f46e5"] as readonly [string, string];
+  const isHome = !result && !loading && !error && !imageResult && !imageLoading && !imageError;
 
   const handleManual = () => {
-    if (manualBarcode) fetchProduct(manualBarcode);
+    if (manualBarcode.trim()) fetchProduct(manualBarcode.trim());
   };
 
   const handleReset = () => {
     reset();
-    setManualBarcode("");
-    setScanned(false);
-    setShowScanner(false);
     resetImage();
+    setManualBarcode("");
+    setShowScanner(false);
   };
 
   return (
-    <LinearGradient colors={bgColors} style={styles.container}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: theme.palette.text.primary }]}>
-          {strings.appTitle}
-        </Text>
-        <View style={styles.toggleRow}>
-          <TouchableOpacity onPress={() => {}} style={{ marginRight: 12 }}>
-            <Text style={{ color: theme.palette.text.secondary, fontWeight: "700" }}>
-              {lang === "el" ? "EN" : "EL"}
-            </Text>
-          </TouchableOpacity>
-          <Text style={{ color: theme.palette.text.secondary, marginRight: 8 }}>🌙</Text>
-          <Button onPress={toggleTheme} style={{ backgroundColor: theme.palette.border }}>
-            {isDark ? "☀️" : "🌙"}
-          </Button>
-        </View>
-      </View>
-      <Text style={[styles.subtitle, { color: theme.palette.text.secondary }]}>
-        {strings.subtitle}
-      </Text>
-
-      {!result && !loading && !error && !imageResult && !imageLoading && !imageError && (
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-          <View style={styles.scanOptions}>
-            <TouchableOpacity style={styles.scanCard} onPress={() => setShowScanner(true)}>
-              <LinearGradient colors={gradientColors} style={styles.scanGradient}>
-                <Text style={styles.scanIcon}>📷</Text>
-                <Text style={[styles.scanTitle, { color: "#fff" }]}>{strings.scanCamera}</Text>
-                <Text style={[styles.scanSub, { color: "#eafff3" }]}>{strings.scanSub}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.scanCard} onPress={pickImage}>
-              <LinearGradient colors={["#10b981", "#059669"]} style={styles.scanGradient}>
-                <Text style={styles.scanIcon}>🍎</Text>
-                <Text style={[styles.scanTitle, { color: "#fff" }]}>{strings.photoScan}</Text>
-                <Text style={[styles.scanSub, { color: "#eafff3" }]}>{strings.photoScanSub}</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-
-          <Card tint={theme.mode} style={styles.card} containerStyle={styles.card}>
-            <BlurView intensity={40} tint={theme.mode} style={StyleSheet.absoluteFill} />
-            <Text style={[styles.cardTitle, { color: theme.palette.text.primary }]}>
-              {strings.manualEntry}
-            </Text>
-            <Input
-              value={manualBarcode}
-              onChangeText={setManualBarcode}
-              placeholder={strings.placeholder}
-              keyboardType="numeric"
-              style={{
-                color: theme.palette.text.primary,
-                borderColor: theme.palette.border,
-                backgroundColor: theme.palette.inputBg,
-              }}
-            />
-            <Button
-              onPress={handleManual}
-              disabled={!manualBarcode}
-              style={{ backgroundColor: theme.palette.primary.main }}
+    <Background>
+      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.brand} onPress={handleReset} activeOpacity={0.8}>
+            <LinearGradient
+              colors={[theme.palette.primary.main, theme.palette.accent.main]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.logo}
             >
-              {strings.analyze}
-            </Button>
-          </Card>
-
-          <View style={styles.grid}>
-            {[
-              { icon: "📜", title: strings.history, sub: strings.historySub },
-              { icon: "⭐", title: strings.favorites, sub: strings.favoritesSub },
-              { icon: "📊", title: strings.statistics, sub: strings.statisticsSub },
-              { icon: "💡", title: strings.tips, sub: strings.tipsSub },
-            ].map((c, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.featureCard,
-                  { backgroundColor: theme.palette.background.paper },
-                ]}
-              >
-                <BlurView intensity={30} tint={theme.mode} style={StyleSheet.absoluteFill} />
-                <Text style={styles.featureIcon}>{c.icon}</Text>
-                <Text style={[styles.featureTitle, { color: theme.palette.text.primary }]}>
-                  {c.title}
-                </Text>
-                <Text style={[styles.featureSub, { color: theme.palette.text.secondary }]}>
-                  {c.sub}
-                </Text>
-              </View>
-            ))}
+              <Ionicons name="leaf" size={20} color="#fff" />
+            </LinearGradient>
+            <Text style={[styles.brandText, { color: text.primary }]}>{strings.appTitle}</Text>
+          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <LangToggle lang={lang} onChange={setLang} theme={theme} />
+            <IconButton icon={isDark ? "sunny-outline" : "moon-outline"} onPress={toggleTheme} size={40} />
           </View>
-        </ScrollView>
-      )}
-
-      {loading && (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#6366f1" />
-          <Text style={[styles.loadingText, { color: theme.palette.text.secondary }]}>
-            {strings.loading}
-          </Text>
         </View>
-      )}
 
-      {error && (
-        <View style={[styles.errorCard, { backgroundColor: theme.palette.background.paper }]}>
-          <Text style={[styles.errorText, { color: theme.palette.error.main }]}>{error}</Text>
-          <Button onPress={handleReset} style={{ backgroundColor: theme.palette.primary.main }}>
-            {strings.retry}
-          </Button>
-        </View>
-      )}
-
-      {imageLoading && (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#10b981" />
-          <Text style={[styles.loadingText, { color: theme.palette.text.secondary }]}>
-            {strings.photoLoading}
-          </Text>
-        </View>
-      )}
-
-      {imageError && (
-        <View style={[styles.errorCard, { backgroundColor: theme.palette.background.paper }]}>
-          <Text style={[styles.errorText, { color: theme.palette.error.main }]}>{imageError}</Text>
-          <Button onPress={resetImage} style={{ backgroundColor: theme.palette.primary.main }}>
-            {strings.retry}
-          </Button>
-        </View>
-      )}
-
-      {result && (
-        <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-          <Card tint={theme.mode} style={styles.card} containerStyle={styles.card}>
-            <BlurView intensity={40} tint={theme.mode} style={StyleSheet.absoluteFill} />
-            {result.imageUrl ? (
-              <Image source={{ uri: result.imageUrl }} style={styles.productImage} />
-            ) : (
-              <View style={[styles.productImage, styles.imagePlaceholder]} />
-            )}
-            <Text style={[styles.productName, { color: theme.palette.text.primary }]}>
-              {result.name || strings.unknownProduct}
-            </Text>
-            <Text style={[styles.barcodeText, { color: theme.palette.text.secondary }]}>
-              {strings.barcode}: {result.barcode}
-            </Text>
-            <Gauge score={result.healthScore ?? 0} />
-          </Card>
-
-          <Card tint={theme.mode} style={styles.card} containerStyle={styles.card}>
-            <BlurView intensity={40} tint={theme.mode} style={StyleSheet.absoluteFill} />
-            <Text style={[styles.cardTitle, { color: theme.palette.text.primary }]}>
-              {strings.aiAnalysis}
-            </Text>
-            <Text style={[styles.summaryText, { color: theme.palette.text.secondary }]}>
-              {result.explanation || result.summary || strings.none}
-            </Text>
-            {result.origin && (
-              <Text style={[styles.barcodeText, { color: theme.palette.text.secondary }]}>
-                {strings.origin}: {result.origin}
-              </Text>
-            )}
-            {result.nutrition && (
-              <Text style={[styles.summaryText, { color: theme.palette.text.secondary }]}>
-                {strings.nutrition}: {result.nutrition}
-              </Text>
-            )}
-          </Card>
-
-          <Card tint={theme.mode} style={styles.card} containerStyle={styles.card}>
-            <BlurView intensity={40} tint={theme.mode} style={StyleSheet.absoluteFill} />
-            <Text style={[styles.sectionTitle, { color: theme.palette.text.primary }]}>
-              {strings.pros}
-            </Text>
-            {(result.pros || []).length === 0 && (
-              <Text style={[styles.emptyText, { color: theme.palette.text.secondary }]}>
-                {strings.none}
-              </Text>
-            )}
-            {(result.pros || []).map((p, i) => (
-              <Text key={i} style={[styles.proItem, { color: theme.palette.success.main }]}>
-                {p}
-              </Text>
-            ))}
-          </Card>
-
-          <Card tint={theme.mode} style={styles.card} containerStyle={styles.card}>
-            <BlurView intensity={40} tint={theme.mode} style={StyleSheet.absoluteFill} />
-            <Text style={[styles.sectionTitle, { color: theme.palette.text.primary }]}>
-              {strings.ingredients}
-            </Text>
-            {(result.ingredients || []).length === 0 && (
-              <Text style={[styles.emptyText, { color: theme.palette.text.secondary }]}>
-                {strings.none}
-              </Text>
-            )}
-            {(result.ingredients || []).map((p, i) => (
-              <Text key={i} style={[styles.proItem, { color: theme.palette.text.primary }]}>
-                {p}
-              </Text>
-            ))}
-          </Card>
-
-          <Card tint={theme.mode} style={styles.card} containerStyle={styles.card}>
-            <BlurView intensity={40} tint={theme.mode} style={StyleSheet.absoluteFill} />
-            <Text style={[styles.sectionTitle, { color: theme.palette.text.primary }]}>
-              {strings.cons}
-            </Text>
-            {(result.cons || []).length === 0 && (
-              <Text style={[styles.emptyText, { color: theme.palette.text.secondary }]}>
-                {strings.none}
-              </Text>
-            )}
-            {(result.cons || []).map((c, i) => (
-              <Text key={i} style={[styles.conItem, { color: theme.palette.error.main }]}>
-                {c}
-              </Text>
-            ))}
-          </Card>
-
-          <Button onPress={handleReset} style={{ backgroundColor: theme.palette.primary.main }}>
-            {strings.rescan}
-          </Button>
-        </ScrollView>
-      )}
-
-      {imageResult && (
-        <View style={styles.center}>
-            <Card tint={theme.mode} style={styles.card} containerStyle={styles.resultCard}>
-            <BlurView intensity={40} tint={theme.mode} style={StyleSheet.absoluteFill} />
-            {imageResult.imageUri && (
-              <Image source={{ uri: imageResult.imageUri }} style={styles.resultImage} />
-            )}
-            <Text style={[styles.sectionTitle, { color: theme.palette.text.primary }]}>
-              {strings.fruitDetected}
-            </Text>
-            <Text style={[styles.title, { color: theme.palette.text.primary }]}>
-              {imageResult.fruitName}
-            </Text>
-            <View style={styles.qualityRow}>
-              <Text style={[styles.qualityLabel, { color: theme.palette.text.secondary }]}>
-                {strings.fruitQuality}:
-              </Text>
-              <Text
-                style={[
-                  styles.qualityValue,
-                  {
-                    color:
-                      imageResult.quality === "good"
-                        ? theme.palette.success.main
-                        : imageResult.quality === "bad"
-                        ? theme.palette.error.main
-                        : theme.palette.warning.main,
-                  },
-                ]}
-              >
-                {imageResult.quality === "good"
-                  ? strings.qualityGood
-                  : imageResult.quality === "bad"
-                  ? strings.qualityBad
-                  : strings.qualityUncertain}
-              </Text>
-              <Text style={[styles.confidenceText, { color: theme.palette.text.secondary }]}>
-                ({Math.round(imageResult.confidence)}% confidence)
-              </Text>
+        {isHome && (
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.hero}>
+              <Chip label={strings.aiPowered} icon="sparkles" color={theme.palette.accent.main} />
+              <Text style={[styles.heroTitle, { color: text.primary }]}>{strings.subtitle}</Text>
             </View>
-            <Text style={[styles.summaryText, { color: theme.palette.text.secondary }]}>
-              {imageResult.summary}
-            </Text>
-            <Button onPress={resetImage} style={{ backgroundColor: theme.palette.primary.main }}>
+
+            {/* Primary action */}
+            <TouchableOpacity activeOpacity={0.9} onPress={() => setShowScanner(true)}>
+              <LinearGradient
+                colors={[theme.palette.primary.main, "#0d9488", theme.palette.accent.dark]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.scanHero}
+              >
+                <View style={styles.scanHeroGlow} />
+                <View style={styles.scanIconWrap}>
+                  <Ionicons name="barcode-outline" size={34} color="#fff" />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.scanHeroTitle}>{strings.scanCamera}</Text>
+                  <Text style={styles.scanHeroSub}>{strings.scanSub}</Text>
+                </View>
+                <View style={styles.scanArrow}>
+                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                </View>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            {/* Secondary action */}
+            <TouchableOpacity activeOpacity={0.85} onPress={() => setShowPhotoSource(true)}>
+              <Card style={styles.rowCard}>
+                <View style={[styles.rowIcon, { backgroundColor: theme.palette.success.soft }]}>
+                  <Ionicons name="nutrition-outline" size={22} color={theme.palette.success.main} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={[styles.rowTitle, { color: text.primary }]}>{strings.photoScan}</Text>
+                  <Text style={[styles.rowSub, { color: text.secondary }]}>{strings.photoScanSub}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={text.muted} />
+              </Card>
+            </TouchableOpacity>
+
+            {/* Manual entry */}
+            <Card>
+              <Text style={[styles.label, { color: text.secondary }]}>{strings.manualEntry}</Text>
+              <View style={styles.inputRow}>
+                <Input
+                  value={manualBarcode}
+                  onChangeText={setManualBarcode}
+                  placeholder={strings.placeholder}
+                  keyboardType="numeric"
+                  onSubmitEditing={handleManual}
+                  style={styles.flex}
+                />
+                <TouchableOpacity
+                  onPress={handleManual}
+                  disabled={!manualBarcode.trim()}
+                  activeOpacity={0.85}
+                  style={{ opacity: manualBarcode.trim() ? 1 : 0.4 }}
+                >
+                  <LinearGradient
+                    colors={[theme.palette.primary.main, theme.palette.primary.dark]}
+                    style={styles.goBtn}
+                  >
+                    <Ionicons name="search" size={20} color="#fff" />
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </Card>
+
+            {/* How it works */}
+            <Text style={[styles.sectionHeading, { color: text.muted }]}>{strings.howItWorks}</Text>
+            <View style={styles.steps}>
+              {(
+                [
+                  { icon: "scan-outline", label: strings.step1 },
+                  { icon: "sparkles-outline", label: strings.step2 },
+                  { icon: "pulse-outline", label: strings.step3 },
+                ] as { icon: IconName; label: string }[]
+              ).map((s, i) => (
+                <Card key={s.label} style={styles.stepCard}>
+                  <Text style={[styles.stepNum, { color: text.muted }]}>0{i + 1}</Text>
+                  <Ionicons name={s.icon} size={22} color={theme.palette.primary.main} />
+                  <Text style={[styles.stepLabel, { color: text.primary }]}>{s.label}</Text>
+                </Card>
+              ))}
+            </View>
+
+            <Text style={[styles.footer, { color: text.muted }]}>{strings.footer}</Text>
+          </ScrollView>
+        )}
+
+        {(loading || imageLoading) && (
+          <View style={styles.centerFill}>
+            <Card style={styles.stateCard}>
+              <View style={[styles.stateIcon, { backgroundColor: theme.palette.primary.main + "22" }]}>
+                <ActivityIndicator size="large" color={theme.palette.primary.main} />
+              </View>
+              <Text style={[styles.stateTitle, { color: text.primary }]}>
+                {loading ? strings.loading : strings.photoLoading}
+              </Text>
+              {loading && <Text style={[styles.stateSub, { color: text.secondary }]}>{strings.loadingSub}</Text>}
+            </Card>
+          </View>
+        )}
+
+        {(error || imageError) && (
+          <View style={styles.centerFill}>
+            <Card style={styles.stateCard}>
+              <View style={[styles.stateIcon, { backgroundColor: theme.palette.error.soft }]}>
+                <Ionicons name="cloud-offline-outline" size={30} color={theme.palette.error.main} />
+              </View>
+              <Text style={[styles.stateTitle, { color: text.primary }]}>
+                {error ? strings.error : strings.photoError}
+              </Text>
+              <Text style={[styles.stateSub, { color: text.secondary }]}>{error || imageError}</Text>
+              <Button onPress={handleReset} icon="refresh" style={styles.fullWidth}>
+                {strings.retry}
+              </Button>
+            </Card>
+          </View>
+        )}
+
+        {result && (
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            <ProductResult result={result} strings={strings} theme={theme} />
+            <Button onPress={handleReset} icon="scan-outline">
+              {strings.rescan}
+            </Button>
+          </ScrollView>
+        )}
+
+        {imageResult && (
+          <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+            <FruitResult result={imageResult} strings={strings} theme={theme} />
+            <Button onPress={handleReset} icon="camera-outline">
               {strings.close}
             </Button>
-          </Card>
-        </View>
-      )}
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
 
       <ScannerModal
         visible={showScanner}
         granted={granted}
         strings={strings}
-        onRequestClose={handleReset}
+        onRequestClose={() => setShowScanner(false)}
         onBarcodeScanned={(data: string) => {
-          if (!data || scanned || loading) return;
-          setScanned(true);
+          if (!data || loading) return;
+          setShowScanner(false);
           fetchProduct(data);
         }}
       />
 
-      <View style={styles.footer}>
-        <Text style={[styles.footerText, { color: "#94a3b8" }]}>{strings.footer}</Text>
+      <PhotoSourceModal
+        visible={showPhotoSource}
+        strings={strings}
+        theme={theme}
+        onRequestClose={() => setShowPhotoSource(false)}
+        onTakePhoto={() => {
+          setShowPhotoSource(false);
+          takePhoto();
+        }}
+        onPickImage={() => {
+          setShowPhotoSource(false);
+          pickImage();
+        }}
+      />
+    </Background>
+  );
+};
+
+const LangToggle = ({
+  lang,
+  onChange,
+  theme,
+}: {
+  lang: "el" | "en";
+  onChange: (l: "el" | "en") => void;
+  theme: Theme;
+}) => (
+  <View style={[styles.segment, { backgroundColor: theme.palette.glass.fill, borderColor: theme.palette.glass.border }]}>
+    {(["el", "en"] as const).map((l) => {
+      const active = l === lang;
+      return (
+        <TouchableOpacity
+          key={l}
+          onPress={() => onChange(l)}
+          style={[styles.segmentItem, active && { backgroundColor: theme.palette.primary.main }]}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.segmentText, { color: active ? "#fff" : theme.palette.text.secondary }]}>
+            {l.toUpperCase()}
+          </Text>
+        </TouchableOpacity>
+      );
+    })}
+  </View>
+);
+
+type ProductResultProps = {
+  result: NonNullable<ReturnType<typeof useProduct>["result"]>;
+  strings: AppStrings;
+  theme: Theme;
+};
+
+const ProductResult = ({ result, strings, theme }: ProductResultProps) => {
+  const { text } = theme.palette;
+  const score = result.healthScore ?? 0;
+  const label = score >= 70 ? strings.scoreLabelHigh : score >= 45 ? strings.scoreLabelMid : strings.scoreLabelLow;
+
+  return (
+    <>
+      <Card style={styles.productCard}>
+        <View style={styles.productHeader}>
+          <View style={styles.productImageWrap}>
+            {result.imageUrl ? (
+              <Image source={{ uri: result.imageUrl }} style={styles.productImage} />
+            ) : (
+              <Ionicons name="cube-outline" size={34} color="#94a3b8" />
+            )}
+          </View>
+          <View style={styles.flex}>
+            <Text style={[styles.productName, { color: text.primary }]} numberOfLines={3}>
+              {result.name || strings.unknownProduct}
+            </Text>
+            <View style={styles.chipRow}>
+              <Chip label={result.barcode} icon="barcode-outline" />
+              {!!result.origin && <Chip label={result.origin} icon="location-outline" />}
+            </View>
+          </View>
+        </View>
+        <View style={[styles.divider, { backgroundColor: theme.palette.border }]} />
+        <Gauge score={score} label={label} caption={strings.healthScore} />
+      </Card>
+
+      <Card>
+        <CardTitle icon="sparkles" color={theme.palette.accent.main} title={strings.aiAnalysis} theme={theme} />
+        <Text style={[styles.body, { color: text.secondary }]}>
+          {result.explanation || result.summary || strings.none}
+        </Text>
+        {!!result.nutrition && (
+          <View style={[styles.infoBox, { backgroundColor: theme.palette.background.surface, borderColor: theme.palette.border }]}>
+            <Text style={[styles.infoLabel, { color: text.muted }]}>{strings.nutrition}</Text>
+            <Text style={[styles.body, { color: text.primary }]}>{result.nutrition}</Text>
+          </View>
+        )}
+      </Card>
+
+      <ListCard
+        title={strings.pros}
+        items={result.pros}
+        icon="checkmark-circle"
+        color={theme.palette.success.main}
+        empty={strings.none}
+        theme={theme}
+      />
+      <ListCard
+        title={strings.cons}
+        items={result.cons}
+        icon="alert-circle"
+        color={theme.palette.error.main}
+        empty={strings.none}
+        theme={theme}
+      />
+
+      {(result.ingredients || []).length > 0 && (
+        <Card>
+          <CardTitle icon="list-outline" color={theme.palette.primary.main} title={strings.ingredients} theme={theme} />
+          <View style={styles.chipRow}>
+            {result.ingredients.map((ing, i) => (
+              <Chip key={i} label={ing.trim()} />
+            ))}
+          </View>
+        </Card>
+      )}
+    </>
+  );
+};
+
+type FruitResultProps = {
+  result: NonNullable<ReturnType<typeof useImageAnalysis>["result"]>;
+  strings: AppStrings;
+  theme: Theme;
+};
+
+const FruitResult = ({ result, strings, theme }: FruitResultProps) => {
+  const { text } = theme.palette;
+  const tone =
+    result.quality === "good"
+      ? { color: theme.palette.success.main, label: strings.qualityGood, icon: "checkmark-circle" as IconName }
+      : result.quality === "bad"
+      ? { color: theme.palette.error.main, label: strings.qualityBad, icon: "close-circle" as IconName }
+      : { color: theme.palette.warning.main, label: strings.qualityUncertain, icon: "help-circle" as IconName };
+  const confidence = Math.round(result.confidence);
+  const name = result.fruitName ? result.fruitName.charAt(0).toUpperCase() + result.fruitName.slice(1) : "";
+
+  return (
+    <Card style={styles.noPad}>
+      {result.imageUri && (
+        <View>
+          <Image source={{ uri: result.imageUri }} style={styles.fruitImage} />
+          <LinearGradient colors={["transparent", "rgba(0,0,0,0.65)"]} style={styles.fruitOverlay}>
+            <Text style={styles.fruitOverline}>
+              {result.fruitDetected ? strings.fruitDetected : strings.noFruit}
+            </Text>
+            {!!name && <Text style={styles.fruitName}>{name}</Text>}
+          </LinearGradient>
+        </View>
+      )}
+      <View style={styles.fruitBody}>
+        {!result.imageUri && (
+          <Text style={[styles.productName, { color: text.primary }]}>{name || strings.noFruit}</Text>
+        )}
+        {result.fruitDetected && (
+          <>
+            <View style={styles.qualityRow}>
+              <Text style={[styles.label, { color: text.secondary, marginBottom: 0 }]}>{strings.fruitQuality}</Text>
+              <View style={[styles.qualityBadge, { backgroundColor: tone.color + "22", borderColor: tone.color + "55" }]}>
+                <Ionicons name={tone.icon} size={16} color={tone.color} />
+                <Text style={[styles.qualityText, { color: tone.color }]}>{tone.label}</Text>
+              </View>
+            </View>
+            <View style={styles.confRow}>
+              <Text style={[styles.infoLabel, { color: text.muted }]}>{strings.confidence}</Text>
+              <Text style={[styles.infoLabel, { color: text.primary }]}>{confidence}%</Text>
+            </View>
+            <View style={[styles.track, { backgroundColor: theme.palette.border }]}>
+              <View style={[styles.trackFill, { width: `${confidence}%`, backgroundColor: tone.color }]} />
+            </View>
+          </>
+        )}
+        <Text style={[styles.body, { color: text.secondary, marginTop: 14 }]}>{result.summary}</Text>
       </View>
-    </LinearGradient>
+    </Card>
+  );
+};
+
+const CardTitle = ({ icon, color, title, theme }: { icon: IconName; color: string; title: string; theme: Theme }) => (
+  <View style={styles.cardTitleRow}>
+    <View style={[styles.cardTitleIcon, { backgroundColor: color + "22" }]}>
+      <Ionicons name={icon} size={16} color={color} />
+    </View>
+    <Text style={[styles.cardTitle, { color: theme.palette.text.primary }]}>{title}</Text>
+  </View>
+);
+
+const ListCard = ({
+  title,
+  items,
+  icon,
+  color,
+  empty,
+  theme,
+}: {
+  title: string;
+  items?: string[];
+  icon: IconName;
+  color: string;
+  empty: string;
+  theme: Theme;
+}) => (
+  <Card>
+    <CardTitle icon={icon} color={color} title={title} theme={theme} />
+    {(items || []).length === 0 ? (
+      <Text style={[styles.body, { color: theme.palette.text.muted }]}>{empty}</Text>
+    ) : (
+      (items || []).map((item, i) => (
+        <View key={i} style={styles.listItem}>
+          <Ionicons name={icon} size={18} color={color} style={styles.listIcon} />
+          <Text style={[styles.body, styles.flex, { color: theme.palette.text.primary }]}>{item}</Text>
+        </View>
+      ))
+    )}
+  </Card>
+);
+
+interface PhotoSourceModalProps {
+  visible: boolean;
+  strings: AppStrings;
+  theme: Theme;
+  onRequestClose: () => void;
+  onTakePhoto: () => void;
+  onPickImage: () => void;
+}
+
+const PhotoSourceModal = ({ visible, strings, theme, onRequestClose, onTakePhoto, onPickImage }: PhotoSourceModalProps) => {
+  const { text } = theme.palette;
+  const options: { icon: IconName; title: string; sub: string; color: string; onPress: () => void }[] = [
+    { icon: "camera", title: strings.takePhoto, sub: strings.takePhotoSub, color: theme.palette.primary.main, onPress: onTakePhoto },
+    { icon: "images", title: strings.chooseFromLibrary, sub: strings.chooseFromLibrarySub, color: theme.palette.accent.main, onPress: onPickImage },
+  ];
+
+  return (
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onRequestClose}>
+      <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={onRequestClose}>
+        <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFill} />
+      </TouchableOpacity>
+      <View style={styles.sheetWrap} pointerEvents="box-none">
+        <View style={[styles.sheet, { borderColor: theme.palette.glass.border }]}>
+          <BlurView intensity={80} tint={theme.palette.glass.tint} style={StyleSheet.absoluteFill} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.mode === "dark" ? "rgba(15,22,48,0.6)" : "rgba(255,255,255,0.6)" }]} />
+          <View style={[styles.grabber, { backgroundColor: text.muted }]} />
+          <Text style={[styles.sheetTitle, { color: text.primary }]}>{strings.imageAnalysis}</Text>
+          <Text style={[styles.sheetSub, { color: text.secondary }]}>{strings.imageAnalysisSub}</Text>
+          {options.map((o) => (
+            <TouchableOpacity
+              key={o.title}
+              onPress={o.onPress}
+              activeOpacity={0.85}
+              style={[styles.sheetOption, { backgroundColor: theme.palette.glass.fill, borderColor: theme.palette.border }]}
+            >
+              <View style={[styles.rowIcon, { backgroundColor: o.color + "22" }]}>
+                <Ionicons name={o.icon} size={22} color={o.color} />
+              </View>
+              <View style={styles.flex}>
+                <Text style={[styles.rowTitle, { color: text.primary }]}>{o.title}</Text>
+                <Text style={[styles.rowSub, { color: text.secondary }]}>{o.sub}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={text.muted} />
+            </TouchableOpacity>
+          ))}
+          <Button variant="ghost" onPress={onRequestClose} style={{ marginTop: 4 }}>
+            {strings.close}
+          </Button>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
 interface ScannerModalProps {
   visible: boolean;
   granted: boolean;
-  strings: ReturnType<typeof useLanguage>["strings"];
+  strings: AppStrings;
   onRequestClose: () => void;
   onBarcodeScanned: (data: string) => void;
 }
 
-const ScannerModal = ({
-  visible,
-  granted,
-  strings,
-  onRequestClose,
-  onBarcodeScanned,
-}: ScannerModalProps) => {
+const FRAME_W = 280;
+const FRAME_H = 180;
+
+const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarcodeScanned }: ScannerModalProps) => {
   const [scanned, setScanned] = useState(false);
+  // The camera fires several events per barcode before state updates; a ref blocks the repeats immediately
+  const scannedRef = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const pulse = useRef(new Animated.Value(0)).current;
-  const scanLineTop = pulse.interpolate({ inputRange: [0, 1], outputRange: [20, 260] });
+  const scanLineTop = pulse.interpolate({ inputRange: [0, 1], outputRange: [10, FRAME_H - 12] });
 
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 1200, useNativeDriver: false }),
-        Animated.timing(pulse, { toValue: 0, duration: 1200, useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.quad), useNativeDriver: false }),
       ])
     );
     anim.start();
@@ -375,104 +551,287 @@ const ScannerModal = ({
     if (!permission) requestPermission();
   }, [permission]);
 
+  useEffect(() => {
+    if (visible) {
+      scannedRef.current = false;
+      setScanned(false);
+    }
+  }, [visible]);
+
   const handleScan = ({ data }: { data: string }) => {
-    if (!data || scanned) return;
+    if (!data || scannedRef.current) return;
+    scannedRef.current = true;
     setScanned(true);
     onBarcodeScanned(data);
   };
 
+  const hasCamera = granted && permission?.granted;
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onRequestClose}>
-      <View style={styles.modalContainer}>
-        <Text style={styles.modalTitle}>{strings.scannerTitle}</Text>
-        {granted && permission?.granted ? (
-          <View style={styles.cameraContainer}>
+      <View style={styles.scanner}>
+        {hasCamera ? (
+          <>
             <CameraView
-              style={styles.camera}
+              style={StyleSheet.absoluteFill}
               facing="back"
-              barcodeScannerSettings={{
-                barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"],
-              }}
+              barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
               onBarcodeScanned={scanned ? undefined : handleScan}
             />
-            <View style={styles.overlay} pointerEvents="none">
-              <View style={styles.frame} />
-              <Animated.View style={[styles.scanLine, { top: scanLineTop }]} />
-              <Text style={styles.scanHint}>{strings.hint}</Text>
+            {/* Dimmed surround with a clear window for the barcode */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+              <View style={styles.dim} />
+              <View style={{ flexDirection: "row", height: FRAME_H }}>
+                <View style={styles.dim} />
+                <View style={styles.frame}>
+                  {(["tl", "tr", "bl", "br"] as const).map((c) => (
+                    <View key={c} style={[styles.corner, styles[c]]} />
+                  ))}
+                  <Animated.View style={[styles.scanLine, { top: scanLineTop }]} />
+                </View>
+                <View style={styles.dim} />
+              </View>
+              <View style={[styles.dim, styles.dimBottom]}>
+                <View style={styles.hintPill}>
+                  <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+                  <Ionicons name="barcode-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
+                  <Text style={styles.hintText}>{strings.hint}</Text>
+                </View>
+              </View>
             </View>
-          </View>
+          </>
         ) : (
-          <View style={styles.center}>
-            <Text style={styles.infoText}>{strings.noCamera}</Text>
-            <Button onPress={requestPermission} style={{ backgroundColor: "#4f46e5" }}>
+          <View style={styles.centerFill}>
+            <View style={[styles.stateIcon, { backgroundColor: "rgba(255,255,255,0.1)" }]}>
+              <Ionicons name="camera-outline" size={30} color="#fff" />
+            </View>
+            <Text style={[styles.stateTitle, { color: "#fff" }]}>{strings.scannerTitle}</Text>
+            <Text style={[styles.stateSub, { color: "#cbd5e1" }]}>{strings.noCamera}</Text>
+            <Button onPress={requestPermission} icon="lock-open-outline" style={{ minWidth: 220 }}>
               {strings.grant}
             </Button>
           </View>
         )}
-        <TouchableOpacity style={styles.closeBtn} onPress={onRequestClose}>
-          <Text style={styles.closeBtnText}>{strings.close}</Text>
-        </TouchableOpacity>
+
+        {/* Top bar */}
+        <View style={styles.scannerTop}>
+          <Text style={styles.scannerTitle}>{strings.scannerTitle}</Text>
+          <TouchableOpacity onPress={onRequestClose} style={styles.closeCircle} activeOpacity={0.8}>
+            <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
+            <Ionicons name="close" size={22} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
     </Modal>
   );
 };
 
+const CORNER = 26;
+
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, paddingTop: 50 },
+  flex: { flex: 1 },
+  fullWidth: { alignSelf: "stretch", marginTop: 6 },
+  scroll: { paddingHorizontal: 18, paddingBottom: 40 },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 8,
-    marginBottom: 4,
+    paddingHorizontal: 18,
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
+    paddingBottom: 12,
   },
-  title: { fontSize: 28, fontWeight: "800" },
-  toggleRow: { flexDirection: "row", alignItems: "center" },
-  subtitle: { textAlign: "center", marginBottom: 16 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  scanOptions: { flexDirection: "row", gap: 10, marginBottom: 16 },
-  scanCard: { flex: 1, borderRadius: 20, overflow: "hidden", height: 180 },
-  scanGradient: { padding: 24, alignItems: "center", borderRadius: 20, height: "100%", justifyContent: "center" },
-  scanIcon: { fontSize: 48, marginBottom: 8 },
-  scanTitle: { color: "#fff", fontSize: 20, fontWeight: "700" },
-  scanSub: { color: "#eafff3", marginTop: 4 },
-  card: { borderRadius: 16, padding: 16, marginBottom: 12, overflow: "hidden" },
-  cardTitle: { fontSize: 16, fontWeight: "700", marginBottom: 8 },
-  input: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 },
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-  featureCard: { width: "48%", borderRadius: 16, padding: 14, marginBottom: 12, overflow: "hidden" },
-  featureIcon: { fontSize: 28, marginBottom: 6 },
-  featureTitle: { fontWeight: "700", marginBottom: 2 },
-  featureSub: { fontSize: 12 },
-  loadingText: { marginTop: 12, fontWeight: "600" },
-  errorCard: { padding: 16, borderRadius: 12, marginTop: 16 },
-  errorText: { color: "#c0392b", marginBottom: 8, textAlign: "center" },
-  productImage: { width: "100%", height: 180, borderRadius: 12, marginBottom: 10, resizeMode: "contain" },
-  imagePlaceholder: { backgroundColor: "#eee" },
-  productName: { fontSize: 20, fontWeight: "700" },
-  barcodeText: { marginTop: 2 },
-  summaryText: { lineHeight: 20 },
-  sectionTitle: { fontSize: 15, fontWeight: "700", marginBottom: 6 },
-  proItem: { color: "#4f46e5", marginBottom: 4 },
-  conItem: { color: "#c0392b", marginBottom: 4 },
-  emptyText: { color: "#aaa" },
-  infoText: { textAlign: "center", marginBottom: 12 },
-  resultCard: { borderRadius: 16, padding: 16, marginBottom: 12, overflow: "hidden", alignItems: "center" },
-  resultImage: { width: 200, height: 200, borderRadius: 12, marginBottom: 12, resizeMode: "cover" },
-  qualityRow: { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 8 },
-  qualityLabel: { fontSize: 14 },
-  qualityValue: { fontSize: 16, fontWeight: "800" },
-  confidenceText: { fontSize: 12 },
-  modalContainer: { flex: 1, backgroundColor: "#000", padding: 16, justifyContent: "center" },
-  modalTitle: { color: "#fff", fontSize: 20, fontWeight: "700", textAlign: "center", marginBottom: 12 },
-  cameraContainer: { height: 320, borderRadius: 16, overflow: "hidden" },
-  camera: { flex: 1 },
-  overlay: { ...StyleSheet.absoluteFill, justifyContent: "center", alignItems: "center" },
-  frame: { width: 260, height: 160, borderWidth: 3, borderColor: "#6366f1", borderRadius: 16 },
-  scanLine: { position: "absolute", left: 30, right: 30, height: 2, backgroundColor: "#6366f1" },
-  scanHint: { marginTop: 12, color: "#fff", fontWeight: "600" },
-  closeBtn: { marginTop: 16, backgroundColor: "#e74c3c", padding: 12, borderRadius: 12, alignItems: "center" },
-  closeBtnText: { color: "#fff", fontWeight: "700" },
-  footer: { paddingVertical: 12, alignItems: "center" },
-  footerText: { fontSize: 12 },
+  brand: { flexDirection: "row", alignItems: "center" },
+  logo: { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  brandText: { fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  segment: { flexDirection: "row", borderRadius: 999, borderWidth: 1, padding: 3 },
+  segmentItem: { paddingHorizontal: 11, paddingVertical: 6, borderRadius: 999 },
+  segmentText: { fontSize: 12, fontWeight: "800", letterSpacing: 0.5 },
+
+  hero: { marginTop: 10, marginBottom: 20, alignItems: "flex-start" },
+  heroTitle: { fontSize: 32, fontWeight: "800", letterSpacing: -0.8, lineHeight: 38, marginTop: 4 },
+
+  scanHero: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 28,
+    padding: 20,
+    minHeight: 120,
+    marginBottom: 14,
+    overflow: "hidden",
+  },
+  scanHeroGlow: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    right: -60,
+    top: -90,
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  scanIconWrap: {
+    width: 62,
+    height: 62,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 16,
+  },
+  scanHeroTitle: { color: "#fff", fontSize: 21, fontWeight: "800", letterSpacing: -0.3 },
+  scanHeroSub: { color: "rgba(255,255,255,0.85)", fontSize: 14, marginTop: 4 },
+  scanArrow: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+
+  rowCard: { flexDirection: "row", alignItems: "center" },
+  rowIcon: { width: 46, height: 46, borderRadius: 15, alignItems: "center", justifyContent: "center", marginRight: 14 },
+  rowTitle: { fontSize: 16, fontWeight: "700" },
+  rowSub: { fontSize: 13, marginTop: 2 },
+
+  label: { fontSize: 13, fontWeight: "600", marginBottom: 10 },
+  inputRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  goBtn: { width: 50, height: 50, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+
+  sectionHeading: { fontSize: 12, fontWeight: "700", letterSpacing: 1.2, textTransform: "uppercase", marginTop: 8, marginBottom: 10 },
+  steps: { flexDirection: "row", gap: 10 },
+  stepCard: { flex: 1, padding: 14, alignItems: "flex-start", gap: 8 },
+  stepNum: { fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  stepLabel: { fontSize: 13, fontWeight: "700" },
+  footer: { textAlign: "center", fontSize: 12, marginTop: 18 },
+
+  centerFill: { flex: 1, justifyContent: "center", alignItems: "center", padding: 24 },
+  stateCard: { alignSelf: "stretch", alignItems: "center", paddingVertical: 28 },
+  stateIcon: { width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  stateTitle: { fontSize: 19, fontWeight: "800", textAlign: "center" },
+  stateSub: { fontSize: 14, textAlign: "center", marginTop: 6, marginBottom: 18, lineHeight: 20 },
+
+  productCard: { paddingBottom: 22 },
+  productHeader: { flexDirection: "row", alignItems: "center" },
+  productImageWrap: {
+    width: 84,
+    height: 84,
+    borderRadius: 20,
+    backgroundColor: "#ffffff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 14,
+    overflow: "hidden",
+  },
+  productImage: { width: 74, height: 74, resizeMode: "contain" },
+  productName: { fontSize: 19, fontWeight: "800", letterSpacing: -0.3, marginBottom: 8 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap" },
+  divider: { height: 1, marginVertical: 16 },
+
+  cardTitleRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  cardTitleIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 10 },
+  cardTitle: { fontSize: 16, fontWeight: "800" },
+  body: { fontSize: 15, lineHeight: 22 },
+  infoBox: { borderRadius: 16, borderWidth: 1, padding: 12, marginTop: 14 },
+  infoLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 0.4, marginBottom: 4 },
+  listItem: { flexDirection: "row", alignItems: "flex-start", marginBottom: 10 },
+  listIcon: { marginRight: 10, marginTop: 2 },
+
+  noPad: { padding: 0 },
+  fruitImage: { width: "100%", height: 260, resizeMode: "cover" },
+  fruitOverlay: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 18, paddingTop: 60 },
+  fruitOverline: { color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase" },
+  fruitName: { color: "#fff", fontSize: 30, fontWeight: "800", letterSpacing: -0.5 },
+  fruitBody: { padding: 18 },
+  qualityRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  qualityBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  qualityText: { fontWeight: "800", fontSize: 14 },
+  confRow: { flexDirection: "row", justifyContent: "space-between", marginTop: 16 },
+  track: { height: 8, borderRadius: 4, overflow: "hidden" },
+  trackFill: { height: 8, borderRadius: 4 },
+
+  sheetBackdrop: { ...StyleSheet.absoluteFill },
+  sheetWrap: { flex: 1, justifyContent: "flex-end" },
+  sheet: {
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    borderWidth: 1,
+    padding: 20,
+    paddingBottom: 36,
+    overflow: "hidden",
+  },
+  grabber: { width: 40, height: 5, borderRadius: 3, alignSelf: "center", marginBottom: 16, opacity: 0.5 },
+  sheetTitle: { fontSize: 21, fontWeight: "800" },
+  sheetSub: { fontSize: 14, marginTop: 4, marginBottom: 18 },
+  sheetOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+
+  scanner: { flex: 1, backgroundColor: "#000" },
+  scannerTop: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 60 : 36,
+    left: 18,
+    right: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  scannerTitle: { color: "#fff", fontSize: 20, fontWeight: "800" },
+  closeCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  dim: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
+  dimBottom: { alignItems: "center", paddingTop: 28 },
+  frame: { width: FRAME_W, height: FRAME_H },
+  corner: { position: "absolute", width: CORNER, height: CORNER, borderColor: "#10b981" },
+  tl: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 18 },
+  tr: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 18 },
+  bl: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 18 },
+  br: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 18 },
+  scanLine: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "#10b981",
+    shadowColor: "#10b981",
+    shadowOpacity: 0.9,
+    shadowRadius: 8,
+  },
+  hintPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  hintText: { color: "#fff", fontWeight: "600", fontSize: 14 },
 });

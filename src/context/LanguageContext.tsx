@@ -10,7 +10,7 @@ interface LanguageContextValue {
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
-  const [lang, setLang] = useState<"el" | "en">("el");
+  const [lang, setLang] = useState<"el" | "en">("en");
   const changeLang = useCallback((next: "el" | "en") => setLang(next), []);
 
   return (

@@ -1,154 +1,169 @@
 export interface AppStrings {
   appTitle: string;
   subtitle: string;
+  aiPowered: string;
   scanCamera: string;
   scanSub: string;
   manualEntry: string;
   placeholder: string;
   analyze: string;
-  history: string;
-  historySub: string;
-  favorites: string;
-  favoritesSub: string;
-  statistics: string;
-  statisticsSub: string;
-  tips: string;
-  tipsSub: string;
+  howItWorks: string;
+  step1: string;
+  step2: string;
+  step3: string;
   loading: string;
+  loadingSub: string;
   error: string;
   retry: string;
   unknownProduct: string;
-    barcode: string;
-    aiAnalysis: string;
-    pros: string;
-    ingredients: string;
-    cons: string;
-    none: string;
-    rescan: string;
-    scannerTitle: string;
-    noCamera: string;
-    grant: string;
-    close: string;
-    hint: string;
-    origin: string;
-    nutrition: string;
-    scoreLabelHigh: string;
-    scoreLabelMid: string;
-    scoreLabelLow: string;
-    footer: string;
-    // Photo scan / fruit quality
-    photoScan: string;
-    photoScanSub: string;
-    fruitDetected: string;
-    fruitQuality: string;
-    qualityGood: string;
-    qualityBad: string;
-    qualityUncertain: string;
-    imageAnalysis: string;
-    pickPhoto: string;
-    photoLoading: string;
-    photoError: string;
-  }
+  barcode: string;
+  aiAnalysis: string;
+  pros: string;
+  ingredients: string;
+  cons: string;
+  none: string;
+  rescan: string;
+  scannerTitle: string;
+  noCamera: string;
+  grant: string;
+  close: string;
+  hint: string;
+  origin: string;
+  nutrition: string;
+  healthScore: string;
+  scoreLabelHigh: string;
+  scoreLabelMid: string;
+  scoreLabelLow: string;
+  footer: string;
+  // Photo scan / fruit quality
+  photoScan: string;
+  photoScanSub: string;
+  fruitDetected: string;
+  fruitQuality: string;
+  qualityGood: string;
+  qualityBad: string;
+  qualityUncertain: string;
+  confidence: string;
+  noFruit: string;
+  imageAnalysis: string;
+  imageAnalysisSub: string;
+  takePhoto: string;
+  takePhotoSub: string;
+  chooseFromLibrary: string;
+  chooseFromLibrarySub: string;
+  photoLoading: string;
+  photoError: string;
+}
 
 export const strings: Record<string, AppStrings> = {
   el: {
     appTitle: "Health Scan",
-    subtitle: "Σάρωσε ένα προϊόν και δες τη διατροφική του αξία",
-    scanCamera: "Άνοιγμα Κάμερας",
-    scanSub: "Σάρωση Barcode",
-    photoScan: "Φωτογραφία Φρούτου",
-    photoScanSub: "Έλεγχος ποιότητας φρούτου",
-    manualEntry: "Χειροκίνητη Εισαγωγή",
-    placeholder: "Εισάγετε barcode",
+    subtitle: "Μάθε τι τρως, σε δευτερόλεπτα.",
+    aiPowered: "Με τεχνητή νοημοσύνη",
+    scanCamera: "Σάρωση Barcode",
+    scanSub: "Στόχευσε τον κωδικό οποιουδήποτε προϊόντος",
+    photoScan: "Έλεγχος Φρούτου",
+    photoScanSub: "Φρεσκάδα από φωτογραφία",
+    manualEntry: "Ή πληκτρολόγησε τον κωδικό",
+    placeholder: "π.χ. 5449000000996",
     analyze: "Ανάλυση",
-    history: "Ιστορικό",
-    historySub: "Προηγούμενες σαρώσεις",
-    favorites: "Αγαπημένα",
-    favoritesSub: "Αποθηκευμένα προϊόντα",
-    statistics: "Στατιστικά",
-    statisticsSub: "Γρήγορη επισκόπηση",
-    tips: "Συμβουλές",
-    tipsSub: "Διατροφικές συμβουλές",
-    loading: "Ανάλυση συστατικών με AI...",
+    howItWorks: "Πώς λειτουργεί",
+    step1: "Σάρωσε",
+    step2: "Ανάλυση AI",
+    step3: "Αποτέλεσμα",
+    loading: "Ανάλυση προϊόντος",
+    loadingSub: "Διαβάζουμε τα συστατικά με AI…",
     error: "Σφάλμα σύνδεσης",
-    retry: "Προσπάθεια ξανά",
+    retry: "Δοκίμασε ξανά",
     unknownProduct: "Άγνωστο Προϊόν",
     barcode: "Barcode",
-    aiAnalysis: "🤖 AI Ανάλυση",
-    pros: "✅ Θετικά Συστατικά",
-    ingredients: "📋 Συστατικά",
-    cons: "⚠️ Αρνητικά / Πρόσθετα",
+    aiAnalysis: "Ανάλυση AI",
+    pros: "Θετικά",
+    ingredients: "Συστατικά",
+    cons: "Αρνητικά",
     none: "—",
-    rescan: "Σάρωση Άλλου Προϊόντος",
+    rescan: "Σάρωση άλλου προϊόντος",
     scannerTitle: "Σάρωση Barcode",
-    noCamera: "Δεν υπάρχει πρόσβαση στην κάμερα",
-    grant: "Χορήγηση Άδειας",
+    noCamera: "Χρειαζόμαστε πρόσβαση στην κάμερα για τη σάρωση.",
+    grant: "Να επιτραπεί",
     close: "Κλείσιμο",
-    hint: "Κεντράρετε το barcode στο πλαίσιο",
-    origin: "Origin",
-    nutrition: "Nutrition",
-    scoreLabelHigh: "Υψηλή Διατροφική Αξία",
-    scoreLabelMid: "Μέτρια Αξία",
-    scoreLabelLow: "Προσοχή στα Συστατικά",
-    footer: "Health Scan (c) 2026",
-    fruitDetected: "Ανιχνεύθηκε Φρούτο",
-    fruitQuality: "Ποιότητα Φρούτου",
-    qualityGood: "Καλό",
-    qualityBad: "Κακό",
+    hint: "Κεντράρισε το barcode στο πλαίσιο",
+    origin: "Προέλευση",
+    nutrition: "Διατροφικά στοιχεία",
+    healthScore: "από 100",
+    scoreLabelHigh: "Υψηλή διατροφική αξία",
+    scoreLabelMid: "Μέτρια αξία",
+    scoreLabelLow: "Προσοχή στα συστατικά",
+    footer: "Health Scan © 2026",
+    fruitDetected: "Ανιχνεύθηκε φρούτο",
+    fruitQuality: "Ποιότητα",
+    qualityGood: "Φρέσκο",
+    qualityBad: "Χαλασμένο",
     qualityUncertain: "Αβέβαιο",
-    imageAnalysis: "📸 Ανάλυση Φωτογραφίας",
-    pickPhoto: "Επιλογή Φωτογραφίας",
-    photoLoading: "Ανάλυση φωτογραφίας...",
+    confidence: "Βεβαιότητα",
+    noFruit: "Δεν βρέθηκε φρούτο",
+    imageAnalysis: "Έλεγχος φρούτου",
+    imageAnalysisSub: "Τράβηξε ή διάλεξε μια καθαρή φωτογραφία",
+    takePhoto: "Λήψη φωτογραφίας",
+    takePhotoSub: "Άνοιγμα κάμερας",
+    chooseFromLibrary: "Από τη βιβλιοθήκη",
+    chooseFromLibrarySub: "Επιλογή υπάρχουσας φωτογραφίας",
+    photoLoading: "Ανάλυση φωτογραφίας…",
     photoError: "Σφάλμα ανάλυσης φωτογραφίας",
   },
   en: {
     appTitle: "Health Scan",
-    subtitle: "Scan a product and see its nutritional value",
-    scanCamera: "Open Camera",
-    scanSub: "Scan Barcode",
-    photoScan: "Photo Scan",
-    photoScanSub: "Check fruit quality",
-    manualEntry: "Manual Entry",
-    placeholder: "Enter barcode",
+    subtitle: "Know what you eat, in seconds.",
+    aiPowered: "AI powered",
+    scanCamera: "Scan Barcode",
+    scanSub: "Point your camera at any product",
+    photoScan: "Fruit Check",
+    photoScanSub: "Freshness from a photo",
+    manualEntry: "Or type the barcode",
+    placeholder: "e.g. 5449000000996",
     analyze: "Analyze",
-    history: "History",
-    historySub: "Previous scans",
-    favorites: "Favorites",
-    favoritesSub: "Saved products",
-    statistics: "Statistics",
-    statisticsSub: "Quick overview",
-    tips: "Tips",
-    tipsSub: "Nutritional advice",
-    loading: "Analyzing ingredients with AI...",
+    howItWorks: "How it works",
+    step1: "Scan",
+    step2: "AI analysis",
+    step3: "Your score",
+    loading: "Analyzing product",
+    loadingSub: "Reading the ingredients with AI…",
     error: "Connection error",
     retry: "Try again",
     unknownProduct: "Unknown Product",
     barcode: "Barcode",
-    aiAnalysis: "🤖 AI Analysis",
-    pros: "✅ Positive Ingredients",
-    ingredients: "📋 Ingredients",
-    cons: "⚠️ Negatives / Additives",
+    aiAnalysis: "AI Analysis",
+    pros: "Positives",
+    ingredients: "Ingredients",
+    cons: "Negatives",
     none: "—",
-    rescan: "Scan Another Product",
+    rescan: "Scan another product",
     scannerTitle: "Scan Barcode",
-    noCamera: "No camera access",
-    grant: "Grant Permission",
+    noCamera: "We need camera access to scan barcodes.",
+    grant: "Allow access",
     close: "Close",
     hint: "Center the barcode in the frame",
     origin: "Origin",
-    nutrition: "Nutrition",
-    scoreLabelHigh: "High Nutritional Value",
-    scoreLabelMid: "Medium Value",
-    scoreLabelLow: "Caution with Ingredients",
-    footer: "Health Scan (c) 2026",
-    fruitDetected: "Fruit Detected",
-    fruitQuality: "Fruit Quality",
-    qualityGood: "Good",
-    qualityBad: "Bad",
+    nutrition: "Nutrition facts",
+    healthScore: "out of 100",
+    scoreLabelHigh: "High nutritional value",
+    scoreLabelMid: "Moderate value",
+    scoreLabelLow: "Watch the ingredients",
+    footer: "Health Scan © 2026",
+    fruitDetected: "Fruit detected",
+    fruitQuality: "Quality",
+    qualityGood: "Fresh",
+    qualityBad: "Spoiled",
     qualityUncertain: "Uncertain",
-    imageAnalysis: "📸 Image Analysis",
-    pickPhoto: "Pick Photo",
-    photoLoading: "Analyzing photo...",
+    confidence: "Confidence",
+    noFruit: "No fruit found",
+    imageAnalysis: "Fruit check",
+    imageAnalysisSub: "Take or choose a clear photo",
+    takePhoto: "Take a photo",
+    takePhotoSub: "Open the camera",
+    chooseFromLibrary: "Choose from library",
+    chooseFromLibrarySub: "Use an existing photo",
+    photoLoading: "Analyzing photo…",
     photoError: "Image analysis error",
   },
 };

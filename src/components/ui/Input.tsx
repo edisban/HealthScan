@@ -1,11 +1,13 @@
-import { TextInput, StyleSheet, TextStyle } from "react-native";
+import { TextInput, StyleSheet, TextStyle, StyleProp } from "react-native";
+import { useTheme } from "@/context/ThemeContext";
 
 interface InputProps {
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
-  style?: TextStyle;
+  style?: StyleProp<TextStyle>;
   keyboardType?: "numeric" | "default";
+  onSubmitEditing?: () => void;
 }
 
 export const Input = ({
@@ -14,17 +16,31 @@ export const Input = ({
   placeholder,
   style,
   keyboardType = "default",
-}: InputProps) => (
-  <TextInput
-    style={[styles.input, style]}
-    value={value}
-    onChangeText={onChangeText}
-    placeholder={placeholder}
-    placeholderTextColor="#94a3b8"
-    keyboardType={keyboardType}
-  />
-);
+  onSubmitEditing,
+}: InputProps) => {
+  const { theme } = useTheme();
+  return (
+    <TextInput
+      style={[
+        styles.input,
+        {
+          color: theme.palette.text.primary,
+          backgroundColor: theme.palette.inputBg,
+          borderColor: theme.palette.border,
+        },
+        style,
+      ]}
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={theme.palette.text.muted}
+      keyboardType={keyboardType}
+      returnKeyType="search"
+      onSubmitEditing={onSubmitEditing}
+    />
+  );
+};
 
 const styles = StyleSheet.create({
-  input: { borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 12 },
+  input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16 },
 });
