@@ -20,6 +20,8 @@ public class Product {
     @Column(length = 2000)
     private String explanation;
     private String lang;
+    // Which product database the barcode was found in
+    private String source;
     private String origin;
     @Column(length = 2000)
     private String nutrition;
@@ -35,6 +37,8 @@ public class Product {
 
     public String getLang() { return lang; }
     public void setLang(String lang) { this.lang = lang; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public String getOrigin() { return origin; }
     public void setOrigin(String origin) { this.origin = origin; }
     public String getNutrition() { return nutrition; }

@@ -29,6 +29,29 @@ public class ProductController {
         return ResponseEntity.ok(response);
     }
 
+    /** Fallback for unknown barcodes: identify the product from a photo of its label (base64 JSON). */
+    @PostMapping(path = "/product/{barcode}/label", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<ProductResponse> analyzeLabel(@PathVariable String barcode,
+                                                        @RequestParam(defaultValue = "el") String lang,
+                                                        @RequestBody ImageAnalysisBase64Request req) {
+        String base64 = req.getImage();
+        if (base64 == null || base64.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        if (base64.contains(",")) {
+            base64 = base64.substring(base64.indexOf(",") + 1);
+        }
+        byte[] imageBytes = java.util.Base64.getMimeDecoder().decode(base64);
+        return ResponseEntity.ok(productService.analyzeLabel(barcode, imageBytes, lang));
+    }
+
+    /** Fallback for unknown barcodes: search the web for the product (slow, ~30 s). */
+    @PostMapping("/product/{barcode}/web-search")
+    public ResponseEntity<ProductResponse> searchWeb(@PathVariable String barcode,
+                                                     @RequestParam(defaultValue = "el") String lang) {
+        return ResponseEntity.ok(productService.searchWeb(barcode, lang));
+    }
+
     @PostMapping(path = "/analyze-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ImageAnalysisResponse> analyzeImage(@RequestParam("file") MultipartFile file) {
         try {

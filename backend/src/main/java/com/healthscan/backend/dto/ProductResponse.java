@@ -13,8 +13,15 @@ public class ProductResponse {
     private String nutrition;
     private java.util.List<String> pros;
     private java.util.List<String> cons;
+    // false when no product database knows the barcode
+    private boolean found = true;
+    private String source = "";
 
     public ProductResponse() {}
+    public boolean isFound() { return found; }
+    public void setFound(boolean found) { this.found = found; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public ProductResponse(String barcode, String name, String imageUrl, String ingredientsText, Integer healthScore, String explanation) {
         this(barcode, name, imageUrl, ingredientsText, healthScore, explanation, name, "", null, "", null, null);
     }

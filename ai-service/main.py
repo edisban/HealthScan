@@ -128,6 +128,100 @@ def analyze(req: AnalyzeRequest):
     )
 
 
+class ProductIdentity(BaseModel):
+    found: bool
+    productName: str = ""
+    brand: str = ""
+    ingredients: str = ""
+
+
+LABEL_PROMPT = (
+    "You read product packaging. From this photo, extract the product name, the brand and the full "
+    "ingredient list exactly as printed (keep the original language). "
+    "Respond ONLY with valid JSON: {\"readable\": <true if a product name or ingredient list is legible, else false>, "
+    "\"productName\": \"...\", \"brand\": \"...\", \"ingredients\": \"<comma-separated ingredients or empty>\"}. No extra text."
+)
+
+SEARCH_PROMPT = (
+    "Search the web for the retail product with barcode (EAN/UPC) {barcode}. Only report a product if a source "
+    "explicitly ties it to this exact barcode. Then reply with ONLY a JSON object, no other text: "
+    "{{\"found\": <true/false>, \"productName\": \"...\", \"brand\": \"...\", "
+    "\"ingredients\": \"<comma-separated ingredients if listed, else empty>\"}}"
+)
+
+
+def _extract_json(text: str) -> dict:
+    import json
+    import re
+    match = re.search(r"\{.*\}", text or "", re.DOTALL)
+    return json.loads(match.group(0)) if match else {}
+
+
+@app.post("/read-label", response_model=ProductIdentity)
+async def read_label(file: UploadFile = File(...)):
+    if client is None:
+        raise HTTPException(status_code=503, detail="AI client not available. Set GROQ_API_KEY.")
+    image = Image.open(io.BytesIO(await file.read())).convert("RGB")
+    # Labels need more resolution than fruit photos for small print, but stay under Groq's size limit
+    image.thumbnail((1600, 1600))
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG", quality=90)
+    import base64
+    data_uri = "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+    completion = client.chat.completions.create(
+        model=VISION_MODEL,
+        messages=[
+            {"role": "system", "content": LABEL_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Read this product label:"},
+                    {"type": "image_url", "image_url": {"url": data_uri}},
+                ],
+            },
+        ],
+        response_format={"type": "json_object"},
+        temperature=0.1,
+        max_tokens=2048,
+    )
+    data = _extract_json(completion.choices[0].message.content)
+    name = str(data.get("productName") or "").strip()
+    ingredients = str(data.get("ingredients") or "").strip()
+    return ProductIdentity(
+        found=bool(data.get("readable")) and bool(name or ingredients),
+        productName=name,
+        brand=str(data.get("brand") or "").strip(),
+        ingredients=ingredients,
+    )
+
+
+class SearchRequest(BaseModel):
+    barcode: str
+
+
+@app.post("/search-product", response_model=ProductIdentity)
+def search_product(req: SearchRequest):
+    if client is None:
+        raise HTTPException(status_code=503, detail="AI client not available. Set GROQ_API_KEY.")
+    # Groq's built-in browser search (free tier); slow, so only used when the user asks for it
+    completion = client.chat.completions.create(
+        model=TEXT_MODEL,
+        messages=[{"role": "user", "content": SEARCH_PROMPT.format(barcode=req.barcode)}],
+        tools=[{"type": "browser_search"}],
+        temperature=0.1,
+        max_tokens=4096,
+        extra_body={"reasoning_effort": "low"},
+    )
+    data = _extract_json(completion.choices[0].message.content)
+    name = str(data.get("productName") or "").strip()
+    return ProductIdentity(
+        found=bool(data.get("found")) and bool(name),
+        productName=name,
+        brand=str(data.get("brand") or "").strip(),
+        ingredients=str(data.get("ingredients") or "").strip(),
+    )
+
+
 @app.post("/analyze-image", response_model=ImageAnalyzeResponse)
 async def analyze_image(file: UploadFile = File(...)):
     contents = await file.read()
