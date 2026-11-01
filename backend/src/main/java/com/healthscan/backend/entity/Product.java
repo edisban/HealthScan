@@ -19,8 +19,32 @@ public class Product {
     private Integer healthScore;
     @Column(length = 2000)
     private String explanation;
+    private String lang;
+    private String origin;
+    @Column(length = 2000)
+    private String nutrition;
+    // AI-generated lists, stored as JSON arrays
+    @Column(columnDefinition = "text")
+    private String ingredientsJson;
+    @Column(columnDefinition = "text")
+    private String prosJson;
+    @Column(columnDefinition = "text")
+    private String consJson;
 
     public Product() {}
+
+    public String getLang() { return lang; }
+    public void setLang(String lang) { this.lang = lang; }
+    public String getOrigin() { return origin; }
+    public void setOrigin(String origin) { this.origin = origin; }
+    public String getNutrition() { return nutrition; }
+    public void setNutrition(String nutrition) { this.nutrition = nutrition; }
+    public String getIngredientsJson() { return ingredientsJson; }
+    public void setIngredientsJson(String ingredientsJson) { this.ingredientsJson = ingredientsJson; }
+    public String getProsJson() { return prosJson; }
+    public void setProsJson(String prosJson) { this.prosJson = prosJson; }
+    public String getConsJson() { return consJson; }
+    public void setConsJson(String consJson) { this.consJson = consJson; }
 
     public Long getId() { return id; }
     public String getBarcode() { return barcode; }

@@ -26,9 +26,10 @@ public class ProductService {
     }
 
     public ProductResponse analyzeProduct(String barcode, String lang) {
-        AiAnalyzeResponse aiRes = null;
-        Product product = repo.findByBarcode(barcode).orElse(null);
-        if (product == null) {
+        Product cached = repo.findByBarcode(barcode).orElse(null);
+        Product product = cached;
+        // Re-analyze products cached without a score (e.g. AI service was down last time) or in another language
+        if (product == null || product.getHealthScore() == null || !lang.equals(product.getLang())) {
             try {
                 // Fetch from Open Food Facts, fallback to Open Products Facts
                 String url = "https://world.openfoodfacts.org/api/v2/product/" + barcode + ".json";
@@ -41,7 +42,7 @@ public class ProductService {
                     root = mapper.readTree(body);
                     p = root.path("product");
                 }
-                product = new Product();
+                product = cached != null ? cached : new Product();
                 product.setBarcode(barcode);
                 product.setName(p.path("product_name").asText("Unknown"));
                 product.setImageUrl(p.path("image_url").asText(""));
@@ -52,15 +53,16 @@ public class ProductService {
                         ? List.of()
                         : Arrays.asList(ingredients.split(","));
 
-                // Forward to AI service (skip if no ingredients)
-                if (!ingredientList.isEmpty()) {
+                // Forward to AI service (with no ingredient list the AI judges by product name)
+                boolean knownProduct = !product.getName().isBlank() && !"Unknown".equals(product.getName());
+                if (!ingredientList.isEmpty() || knownProduct) {
                     try {
                         AiAnalyzeRequest aiReq = new AiAnalyzeRequest(barcode, product.getName(), ingredientList, lang);
                         String envUrl = System.getenv("AI_SERVICE_URL");
                         String aiUrl = (envUrl == null || envUrl.isBlank())
                                 ? "http://localhost:8000/analyze"
-                                : envUrl;
-                        aiRes = webClient.post()
+                                : envUrl + "/analyze";
+                        AiAnalyzeResponse aiRes = webClient.post()
                                 .uri(aiUrl)
                                 .bodyValue(aiReq)
                                 .retrieve()
@@ -69,6 +71,12 @@ public class ProductService {
                         if (aiRes != null) {
                             product.setHealthScore(aiRes.getHealthScore());
                             product.setExplanation(aiRes.getSummary());
+                            product.setLang(lang);
+                            product.setOrigin(aiRes.getOrigin());
+                            product.setNutrition(aiRes.getNutrition());
+                            product.setIngredientsJson(mapper.writeValueAsString(aiRes.getIngredients()));
+                            product.setProsJson(mapper.writeValueAsString(aiRes.getPros()));
+                            product.setConsJson(mapper.writeValueAsString(aiRes.getCons()));
                         }
                     } catch (Exception ignored) {
                         // AI service unavailable; keep defaults
@@ -76,23 +84,30 @@ public class ProductService {
                 }
                 repo.save(product);
             } catch (Exception e) {
-                product = new Product();
-                product.setBarcode(barcode);
-                product.setName("Unknown Product");
-                product.setHealthScore(50);
-                product.setExplanation("Δεν ήταν δυνατή η ανάλυση.");
-                repo.save(product);
+                // Lookup failed (network error or barcode not found); don't cache, so the next scan retries
+                ProductResponse fallback = new ProductResponse(barcode, "Unknown Product", "", "", null,
+                        "el".equals(lang) ? "Δεν ήταν δυνατή η ανάλυση." : "Could not analyze this product.");
+                return fallback;
             }
         }
         return new ProductResponse(
                 product.getBarcode(), product.getName(), product.getImageUrl(),
                 product.getIngredientsText(), product.getHealthScore(), product.getExplanation(),
-                aiRes != null ? aiRes.getProductName() : product.getName(),
-                aiRes != null ? aiRes.getOrigin() : "",
-                aiRes != null ? aiRes.getIngredients() : null,
-                aiRes != null ? aiRes.getNutrition() : "",
-                aiRes != null ? aiRes.getPros() : null,
-                aiRes != null ? aiRes.getCons() : null);
+                product.getName(),
+                product.getOrigin() != null ? product.getOrigin() : "",
+                readList(product.getIngredientsJson()),
+                product.getNutrition() != null ? product.getNutrition() : "",
+                readList(product.getProsJson()),
+                readList(product.getConsJson()));
+    }
+
+    private List<String> readList(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return Arrays.asList(mapper.readValue(json, String[].class));
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
 

@@ -24,7 +24,7 @@ services:
       - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/healthscan
       - SPRING_DATASOURCE_USERNAME=postgres
       - SPRING_DATASOURCE_PASSWORD=postgres
-      - AI_SERVICE_URL=http://ai-service:8000/analyze
+      - AI_SERVICE_URL=http://ai-service:8000
     depends_on:
       - postgres
       - ai-service
