@@ -7,6 +7,7 @@ import com.healthscan.backend.dto.AiAnalyzeResponse;
 import com.healthscan.backend.dto.ProductResponse;
 import com.healthscan.backend.entity.Product;
 import com.healthscan.backend.repository.ProductRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -82,7 +83,11 @@ public class ProductService {
                         // AI service unavailable; keep defaults
                     }
                 }
-                repo.save(product);
+                try {
+                    repo.save(product);
+                } catch (DataIntegrityViolationException duplicate) {
+                    // A concurrent request for the same barcode saved it first; our analysis is still valid
+                }
             } catch (Exception e) {
                 // Lookup failed (network error or barcode not found); don't cache, so the next scan retries
                 ProductResponse fallback = new ProductResponse(barcode, "Unknown Product", "", "", null,
