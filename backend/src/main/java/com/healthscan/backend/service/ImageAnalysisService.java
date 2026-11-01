@@ -2,7 +2,7 @@ package com.healthscan.backend.service;
 
 import com.healthscan.backend.dto.ImageAnalysisResponse;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.MediaType;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -41,7 +41,7 @@ public class ImageAnalysisService {
 
             ImageAnalysisResponse res = webClient.post()
                     .uri("/analyze-image")
-                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    // fromMultipartData sets the multipart Content-Type (with boundary) itself
                     .body(BodyInserters.fromMultipartData(buildMultipart(resource)))
                     .retrieve()
                     .bodyToMono(ImageAnalysisResponse.class)
@@ -57,6 +57,7 @@ public class ImageAnalysisService {
         }
     }
 
+    @NonNull
     private MultiValueMap<String, Object> buildMultipart(ByteArrayResource resource) {
         MultiValueMap<String, Object> map = new LinkedMultiValueMap<>();
         map.add("file", resource);
