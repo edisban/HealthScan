@@ -1,19 +1,9 @@
 {
-  "name": "health-scan-mobile",
+  "name": "health-scan",
   "version": "1.0.0",
-  "main": "node_modules/expo/AppEntry.js",
+  "private": true,
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios"
-  },
-  "dependencies": {
-    "expo": "^58.0.21",
-    "expo-blur": "~58.0.5",
-    "expo-camera": "^58.0.14",
-    "expo-linear-gradient": "~58.0.3",
-    "expo-status-bar": "~58.0.4",
-    "react": "19.3.0",
-    "react-native": "0.88.1"
+    "start": "cd mobile && npx expo start --port 8085 --lan",
+    "start:tunnel": "cd mobile && npx expo start --tunnel --port 8085"
   }
 }

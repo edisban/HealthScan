@@ -1,3 +1,22 @@
+# Secrets
+.env
+.env.local
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Backend (Maven)
+backend/target/
+
+# AI service (Python)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.pt
+
+# Mobile (Expo) - see also mobile/.gitignore
 node_modules/
-.expo/
-*.log
