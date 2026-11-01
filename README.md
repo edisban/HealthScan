@@ -127,3 +127,7 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 - **No health score** – check `GROQ_API_KEY` in `.env`, then `docker compose up -d --build`.
 - **Product not found** – use the label photo option; small or regional brands are often missing from public databases.
 - **Containers not running** – `docker compose ps` and `docker compose logs backend`.
+
+## License
+
+[MIT](LICENSE)
