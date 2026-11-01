@@ -1,5 +1,4 @@
 import { API_BASE } from "@/constants/api";
-import { uriToBase64 } from "@/utils/photo";
 
 export interface ImageAnalysisResponse {
   fruitDetected: boolean;
@@ -11,12 +10,11 @@ export interface ImageAnalysisResponse {
 }
 
 export const imageApi = {
-  analyzeImage: async (uri: string): Promise<ImageAnalysisResponse> => {
-    const base64 = await uriToBase64(uri);
+  analyzeImage: async (dataUrl: string): Promise<ImageAnalysisResponse> => {
     const apiResponse = await fetch(`${API_BASE}/api/v1/analyze-image-base64`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: base64 }),
+      body: JSON.stringify({ image: dataUrl }),
     });
     if (!apiResponse.ok) {
       throw new Error(`HTTP ${apiResponse.status}`);

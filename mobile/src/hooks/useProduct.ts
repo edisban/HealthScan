@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { productApi } from "@/api/products";
 import { Product } from "@/api/types";
-import { getPhotoUri, PhotoSource } from "@/utils/photo";
+import { getPhoto, Photo, PhotoSource } from "@/utils/photo";
 
 export type ProductLoadingKind = "lookup" | "label" | "web";
 
@@ -51,16 +51,16 @@ export const useProduct = (lang: string): UseProductReturn => {
 
   const analyzeLabel = useCallback(
     async (barcode: string, source: PhotoSource) => {
-      let uri: string | null;
+      let photo: Photo | null;
       try {
-        uri = await getPhotoUri(source);
+        photo = await getPhoto(source);
       } catch (e) {
         setError((e as Error).message);
         return;
       }
-      if (!uri) return;
-      const photo = uri;
-      await run("label", barcode, () => productApi.analyzeLabel(barcode, photo, lang));
+      if (!photo) return;
+      const { dataUrl } = photo;
+      await run("label", barcode, () => productApi.analyzeLabel(barcode, dataUrl, lang));
     },
     [lang, run]
   );

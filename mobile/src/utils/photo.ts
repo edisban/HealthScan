@@ -2,11 +2,20 @@ import * as ImagePicker from "expo-image-picker";
 
 export type PhotoSource = "camera" | "library";
 
-/** Asks for permission, opens the camera or photo library, and returns the picked image URI (null if cancelled). */
-export const getPhotoUri = async (
+export interface Photo {
+  uri: string;
+  // data URL ("data:image/jpeg;base64,...") ready to send to the backend
+  dataUrl: string;
+}
+
+/**
+ * Asks for permission, opens the camera or photo library, and returns the picked photo (null if cancelled).
+ * The picker returns base64 directly, which avoids slow fetch().blob() round trips through the native blob store.
+ */
+export const getPhoto = async (
   source: PhotoSource,
   options: ImagePicker.ImagePickerOptions = {}
-): Promise<string | null> => {
+): Promise<Photo | null> => {
   const permission =
     source === "camera"
       ? await ImagePicker.requestCameraPermissionsAsync()
@@ -14,23 +23,13 @@ export const getPhotoUri = async (
   if (permission.granted !== true) {
     throw new Error(source === "camera" ? "Camera permission required" : "Photo library permission required");
   }
+  const pickerOptions: ImagePicker.ImagePickerOptions = { quality: 0.7, base64: true, ...options };
   const result =
     source === "camera"
-      ? await ImagePicker.launchCameraAsync({ quality: 0.7, ...options })
-      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.7, ...options });
-  if (result.canceled || !result.assets?.[0]) return null;
-  return result.assets[0].uri;
-};
-
-/** Reads a local image as a base64 data URL (avoids React Native FormData upload issues). */
-export const uriToBase64 = async (uri: string): Promise<string> => {
-  const response = await fetch(uri);
-  if (!response.ok) throw new Error("Failed to read image");
-  const blob = await response.blob();
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+      ? await ImagePicker.launchCameraAsync(pickerOptions)
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], ...pickerOptions });
+  const asset = result.canceled ? undefined : result.assets?.[0];
+  if (!asset) return null;
+  if (!asset.base64) throw new Error("Failed to read image");
+  return { uri: asset.uri, dataUrl: `data:${asset.mimeType ?? "image/jpeg"};base64,${asset.base64}` };
 };

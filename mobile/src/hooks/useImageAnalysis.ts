@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { imageApi } from "@/api/image";
 import type { ImageAnalysisResponse } from "@/api/image";
-import { getPhotoUri, PhotoSource } from "@/utils/photo";
+import { getPhoto, Photo, PhotoSource } from "@/utils/photo";
 
 export interface UseImageAnalysisReturn {
   result: ImageAnalysisResponse | null;
@@ -9,7 +9,7 @@ export interface UseImageAnalysisReturn {
   error: string | null;
   pickImage: () => Promise<void>;
   takePhoto: () => Promise<void>;
-  analyzeUri: (uri: string) => Promise<void>;
+  analyzePhoto: (photo: Photo) => Promise<void>;
   reset: () => void;
 }
 
@@ -18,13 +18,13 @@ export const useImageAnalysis = (): UseImageAnalysisReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const analyzeUri = useCallback(async (uri: string) => {
+  const analyzePhoto = useCallback(async (photo: Photo) => {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const json = await imageApi.analyzeImage(uri);
-      setResult({ ...json, imageUri: uri });
+      const json = await imageApi.analyzeImage(photo.dataUrl);
+      setResult({ ...json, imageUri: photo.uri });
     } catch (e) {
       setError((e as Error).message || "Image analysis failed");
     } finally {
@@ -36,13 +36,13 @@ export const useImageAnalysis = (): UseImageAnalysisReturn => {
     async (source: PhotoSource) => {
       try {
         // Square crop keeps the fruit centered for the detector
-        const uri = await getPhotoUri(source, { allowsEditing: true, aspect: [1, 1] });
-        if (uri) await analyzeUri(uri);
+        const photo = await getPhoto(source, { allowsEditing: true, aspect: [1, 1] });
+        if (photo) await analyzePhoto(photo);
       } catch (e) {
         setError((e as Error).message);
       }
     },
-    [analyzeUri]
+    [analyzePhoto]
   );
 
   const pickImage = useCallback(() => fromSource("library"), [fromSource]);
@@ -53,5 +53,5 @@ export const useImageAnalysis = (): UseImageAnalysisReturn => {
     setError(null);
   }, []);
 
-  return { result, loading, error, pickImage, takePhoto, analyzeUri, reset };
+  return { result, loading, error, pickImage, takePhoto, analyzePhoto, reset };
 };
