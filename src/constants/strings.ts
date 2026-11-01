@@ -53,6 +53,21 @@ export interface AppStrings {
   chooseFromLibrarySub: string;
   photoLoading: string;
   photoError: string;
+  // Barcode not found fallbacks
+  notFoundTitle: string;
+  notFoundSub: string;
+  labelPhoto: string;
+  labelPhotoSub: string;
+  labelLibrary: string;
+  labelLibrarySub: string;
+  webSearch: string;
+  webSearchSub: string;
+  webSearchFailed: string;
+  labelLoading: string;
+  labelLoadingSub: string;
+  webLoading: string;
+  webLoadingSub: string;
+  source: string;
 }
 
 export const strings: Record<string, AppStrings> = {
@@ -110,6 +125,20 @@ export const strings: Record<string, AppStrings> = {
     chooseFromLibrarySub: "Επιλογή υπάρχουσας φωτογραφίας",
     photoLoading: "Ανάλυση φωτογραφίας…",
     photoError: "Σφάλμα ανάλυσης φωτογραφίας",
+    notFoundTitle: "Το προϊόν δεν βρέθηκε",
+    notFoundSub: "Δεν υπάρχει ακόμα σε καμία βάση δεδομένων. Βοήθησέ μας να το αναγνωρίσουμε:",
+    labelPhoto: "Φωτογράφισε τα συστατικά",
+    labelPhotoSub: "Το AI διαβάζει την ετικέτα · πιο αξιόπιστο",
+    labelLibrary: "Ετικέτα από τη βιβλιοθήκη",
+    labelLibrarySub: "Χρησιμοποίησε υπάρχουσα φωτογραφία",
+    webSearch: "Αναζήτηση στο διαδίκτυο",
+    webSearchSub: "Διαρκεί έως 30 δευτερόλεπτα",
+    webSearchFailed: "Δεν βρέθηκε ούτε στο διαδίκτυο. Δοκίμασε μια φωτογραφία της ετικέτας.",
+    labelLoading: "Ανάγνωση ετικέτας",
+    labelLoadingSub: "Το AI διαβάζει τα συστατικά…",
+    webLoading: "Αναζήτηση στο διαδίκτυο",
+    webLoadingSub: "Μπορεί να διαρκέσει έως 30 δευτερόλεπτα…",
+    source: "Πηγή",
   },
   en: {
     appTitle: "Health Scan",
@@ -165,5 +194,19 @@ export const strings: Record<string, AppStrings> = {
     chooseFromLibrarySub: "Use an existing photo",
     photoLoading: "Analyzing photo…",
     photoError: "Image analysis error",
+    notFoundTitle: "Product not found",
+    notFoundSub: "It isn't in any product database yet. Help us identify it:",
+    labelPhoto: "Photograph the ingredients",
+    labelPhotoSub: "AI reads the label · most reliable",
+    labelLibrary: "Label from library",
+    labelLibrarySub: "Use an existing photo",
+    webSearch: "Search the web",
+    webSearchSub: "Takes up to 30 seconds",
+    webSearchFailed: "Not found on the web either. Try a photo of the label.",
+    labelLoading: "Reading the label",
+    labelLoadingSub: "AI is reading the ingredients…",
+    webLoading: "Searching the web",
+    webLoadingSub: "This can take up to 30 seconds…",
+    source: "Source",
   },
 };

@@ -32,7 +32,17 @@ export const HomeScreen = () => {
   const { theme, isDark, toggleTheme } = useTheme();
   const { lang, setLang, strings } = useLanguage();
   const { granted } = useCamera();
-  const { result, loading, error, fetchProduct, reset } = useProduct(lang);
+  const {
+    result,
+    loading,
+    loadingKind,
+    error,
+    webSearchFailed,
+    fetchProduct,
+    analyzeLabel,
+    searchWeb,
+    reset,
+  } = useProduct(lang);
   const {
     result: imageResult,
     loading: imageLoading,
@@ -185,9 +195,23 @@ export const HomeScreen = () => {
                 <ActivityIndicator size="large" color={theme.palette.primary.main} />
               </View>
               <Text style={[styles.stateTitle, { color: text.primary }]}>
-                {loading ? strings.loading : strings.photoLoading}
+                {!loading
+                  ? strings.photoLoading
+                  : loadingKind === "label"
+                  ? strings.labelLoading
+                  : loadingKind === "web"
+                  ? strings.webLoading
+                  : strings.loading}
               </Text>
-              {loading && <Text style={[styles.stateSub, { color: text.secondary }]}>{strings.loadingSub}</Text>}
+              {loading && (
+                <Text style={[styles.stateSub, { color: text.secondary }]}>
+                  {loadingKind === "label"
+                    ? strings.labelLoadingSub
+                    : loadingKind === "web"
+                    ? strings.webLoadingSub
+                    : strings.loadingSub}
+                </Text>
+              )}
             </Card>
           </View>
         )}
@@ -209,10 +233,26 @@ export const HomeScreen = () => {
           </View>
         )}
 
-        {result && (
+        {result && !loading && !error && (
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-            <ProductResult result={result} strings={strings} theme={theme} />
-            <Button onPress={handleReset} icon="scan-outline">
+            {result.found === false ? (
+              <NotFound
+                barcode={result.barcode}
+                webSearchFailed={webSearchFailed}
+                strings={strings}
+                theme={theme}
+                onLabelPhoto={() => analyzeLabel(result.barcode, "camera")}
+                onLabelLibrary={() => analyzeLabel(result.barcode, "library")}
+                onWebSearch={() => searchWeb(result.barcode)}
+              />
+            ) : (
+              <ProductResult result={result} strings={strings} theme={theme} />
+            )}
+            <Button
+              onPress={handleReset}
+              icon="scan-outline"
+              variant={result.found === false ? "ghost" : "primary"}
+            >
               {strings.rescan}
             </Button>
           </ScrollView>
@@ -315,6 +355,9 @@ const ProductResult = ({ result, strings, theme }: ProductResultProps) => {
             <View style={styles.chipRow}>
               <Chip label={result.barcode} icon="barcode-outline" />
               {!!result.origin && <Chip label={result.origin} icon="location-outline" />}
+              {!!result.source && (
+                <Chip label={result.source} icon={sourceIcon(result.source)} color={theme.palette.accent.main} />
+              )}
             </View>
           </View>
         </View>
@@ -363,6 +406,73 @@ const ProductResult = ({ result, strings, theme }: ProductResultProps) => {
         </Card>
       )}
     </>
+  );
+};
+
+const sourceIcon = (source: string): IconName =>
+  source === "Label photo" ? "camera-outline" : source === "Web search" ? "globe-outline" : "server-outline";
+
+type NotFoundProps = {
+  barcode: string;
+  webSearchFailed: boolean;
+  strings: AppStrings;
+  theme: Theme;
+  onLabelPhoto: () => void;
+  onLabelLibrary: () => void;
+  onWebSearch: () => void;
+};
+
+const NotFound = ({
+  barcode,
+  webSearchFailed,
+  strings,
+  theme,
+  onLabelPhoto,
+  onLabelLibrary,
+  onWebSearch,
+}: NotFoundProps) => {
+  const { text } = theme.palette;
+  const options: { icon: IconName; title: string; sub: string; color: string; onPress: () => void }[] = [
+    { icon: "camera", title: strings.labelPhoto, sub: strings.labelPhotoSub, color: theme.palette.primary.main, onPress: onLabelPhoto },
+    { icon: "images", title: strings.labelLibrary, sub: strings.labelLibrarySub, color: theme.palette.accent.main, onPress: onLabelLibrary },
+  ];
+  if (!webSearchFailed) {
+    options.push({ icon: "globe-outline", title: strings.webSearch, sub: strings.webSearchSub, color: "#06b6d4", onPress: onWebSearch });
+  }
+
+  return (
+    <Card style={styles.notFoundCard}>
+      <View style={[styles.stateIcon, { backgroundColor: theme.palette.warning.soft }]}>
+        <Ionicons name="search-outline" size={30} color={theme.palette.warning.main} />
+      </View>
+      <Text style={[styles.stateTitle, { color: text.primary }]}>{strings.notFoundTitle}</Text>
+      <View style={styles.notFoundChip}>
+        <Chip label={barcode} icon="barcode-outline" />
+      </View>
+      {webSearchFailed && (
+        <View style={[styles.infoBox, styles.notFoundNote, { backgroundColor: theme.palette.warning.soft, borderColor: theme.palette.warning.main + "44" }]}>
+          <Text style={[styles.body, { color: text.primary }]}>{strings.webSearchFailed}</Text>
+        </View>
+      )}
+      <Text style={[styles.stateSub, styles.notFoundSub, { color: text.secondary }]}>{strings.notFoundSub}</Text>
+      {options.map((o) => (
+        <TouchableOpacity
+          key={o.title}
+          onPress={o.onPress}
+          activeOpacity={0.85}
+          style={[styles.sheetOption, styles.fullWidthOption, { backgroundColor: theme.palette.glass.fill, borderColor: theme.palette.border }]}
+        >
+          <View style={[styles.rowIcon, { backgroundColor: o.color + "22" }]}>
+            <Ionicons name={o.icon} size={22} color={o.color} />
+          </View>
+          <View style={styles.flex}>
+            <Text style={[styles.rowTitle, { color: text.primary }]}>{o.title}</Text>
+            <Text style={[styles.rowSub, { color: text.secondary }]}>{o.sub}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={text.muted} />
+        </TouchableOpacity>
+      ))}
+    </Card>
   );
 };
 
@@ -739,6 +849,12 @@ const styles = StyleSheet.create({
   infoLabel: { fontSize: 12, fontWeight: "700", letterSpacing: 0.4, marginBottom: 4 },
   listItem: { flexDirection: "row", alignItems: "flex-start", marginBottom: 10 },
   listIcon: { marginRight: 10, marginTop: 2 },
+
+  notFoundCard: { alignItems: "center", paddingTop: 26 },
+  notFoundChip: { marginTop: 10 },
+  notFoundNote: { alignSelf: "stretch", marginTop: 6, marginBottom: 4 },
+  notFoundSub: { marginBottom: 14 },
+  fullWidthOption: { alignSelf: "stretch" },
 
   noPad: { padding: 0 },
   fruitImage: { width: "100%", height: 260, resizeMode: "cover" },

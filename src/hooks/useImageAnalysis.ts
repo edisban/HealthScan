@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { imageApi } from "@/api/image";
 import type { ImageAnalysisResponse } from "@/api/image";
-import * as ImagePicker from "expo-image-picker";
+import { getPhotoUri, PhotoSource } from "@/utils/photo";
 
 export interface UseImageAnalysisReturn {
   result: ImageAnalysisResponse | null;
@@ -18,55 +18,35 @@ export const useImageAnalysis = (): UseImageAnalysisReturn => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const pickImage = useCallback(async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (permissionResult.granted !== true) {
-      setError("Photo library permission required");
-      return;
-    }
-    const pickerResult = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
-    const uri = pickerResult.assets[0].uri;
-    await analyzeUri(uri);
-  }, []);
-
-  const takePhoto = useCallback(async () => {
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (permissionResult.granted !== true) {
-      setError("Camera permission required");
-      return;
-    }
-    const pickerResult = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (pickerResult.canceled || !pickerResult.assets?.[0]) return;
-    const uri = pickerResult.assets[0].uri;
-    await analyzeUri(uri);
-  }, []);
-
   const analyzeUri = useCallback(async (uri: string) => {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
       const json = await imageApi.analyzeImage(uri);
-      setResult({
-        ...json,
-        imageUri: uri,
-      } as ImageAnalysisResponse & { imageUri?: string });
+      setResult({ ...json, imageUri: uri });
     } catch (e) {
       setError((e as Error).message || "Image analysis failed");
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const fromSource = useCallback(
+    async (source: PhotoSource) => {
+      try {
+        // Square crop keeps the fruit centered for the detector
+        const uri = await getPhotoUri(source, { allowsEditing: true, aspect: [1, 1] });
+        if (uri) await analyzeUri(uri);
+      } catch (e) {
+        setError((e as Error).message);
+      }
+    },
+    [analyzeUri]
+  );
+
+  const pickImage = useCallback(() => fromSource("library"), [fromSource]);
+  const takePhoto = useCallback(() => fromSource("camera"), [fromSource]);
 
   const reset = useCallback(() => {
     setResult(null);

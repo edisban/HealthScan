@@ -1,4 +1,5 @@
 import { API_BASE } from "@/constants/api";
+import { uriToBase64 } from "@/utils/photo";
 
 export interface ImageAnalysisResponse {
   fruitDetected: boolean;
@@ -11,17 +12,7 @@ export interface ImageAnalysisResponse {
 
 export const imageApi = {
   analyzeImage: async (uri: string): Promise<ImageAnalysisResponse> => {
-    // Read image as base64 to avoid React Native FormData issues
-    const response = await fetch(uri);
-    if (!response.ok) throw new Error("Failed to read image");
-    const blob = await response.blob();
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-
+    const base64 = await uriToBase64(uri);
     const apiResponse = await fetch(`${API_BASE}/api/v1/analyze-image-base64`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
