@@ -73,7 +73,7 @@ export interface AppStrings {
 export const strings: Record<string, AppStrings> = {
   el: {
     appTitle: "Health Scan",
-    subtitle: "Μάθε τι τρως, σε δευτερόλεπτα.",
+    subtitle: "Μάθε τι τρως και τι χρησιμοποιείς, σε δευτερόλεπτα.",
     aiPowered: "Με τεχνητή νοημοσύνη",
     scanCamera: "Σάρωση Barcode",
     scanSub: "Στόχευσε τον κωδικό οποιουδήποτε προϊόντος",
@@ -142,7 +142,7 @@ export const strings: Record<string, AppStrings> = {
   },
   en: {
     appTitle: "Health Scan",
-    subtitle: "Know what you eat, in seconds.",
+    subtitle: "Know what you eat and use, in seconds.",
     aiPowered: "AI powered",
     scanCamera: "Scan Barcode",
     scanSub: "Point your camera at any product",

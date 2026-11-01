@@ -1,6 +1,6 @@
 # Health Scan
 
-A mobile app that scans food barcodes and fruit photos and tells you how healthy they are. Scan a product to get a 0–100 health score with its positives, negatives, ingredients and nutrition facts, or take a photo of a fruit to check whether it is fresh or spoiled.
+A mobile app that scans product barcodes and fruit photos and tells you how healthy they are. Scan food, cosmetics and other everyday products to get a 0–100 health score with positives, negatives, ingredients and nutrition facts, or take a photo of a fruit to check whether it is fresh or spoiled.
 
 ## Features
 
