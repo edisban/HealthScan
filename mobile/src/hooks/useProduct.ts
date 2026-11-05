@@ -1,20 +1,21 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { productApi } from "@/api/products";
 import { Product } from "@/api/types";
 import { getPhoto, Photo, PhotoSource } from "@/utils/photo";
 
 export type ProductLoadingKind = "lookup" | "label" | "web";
 
+const WEB_SEARCH_TIMEOUT_MS = 45000;
+
 export interface UseProductReturn {
   result: Product | null;
   loading: boolean;
   loadingKind: ProductLoadingKind;
   error: string | null;
-  // True after a web search for the current barcode came back empty
-  webSearchFailed: boolean;
   fetchProduct: (barcode: string) => Promise<void>;
   analyzeLabel: (barcode: string, source: PhotoSource) => Promise<void>;
-  searchWeb: (barcode: string) => Promise<void>;
+  // Stops the automatic web search and goes straight to the not-found screen
+  skipWebSearch: () => void;
   reset: () => void;
 }
 
@@ -23,7 +24,7 @@ export const useProduct = (lang: string): UseProductReturn => {
   const [loading, setLoading] = useState(false);
   const [loadingKind, setLoadingKind] = useState<ProductLoadingKind>("lookup");
   const [error, setError] = useState<string | null>(null);
-  const [webSearchFailed, setWebSearchFailed] = useState(false);
+  const webSearch = useRef<AbortController | null>(null);
 
   const run = useCallback(async (kind: ProductLoadingKind, barcode: string, call: () => Promise<Product>) => {
     setLoadingKind(kind);
@@ -32,7 +33,6 @@ export const useProduct = (lang: string): UseProductReturn => {
     try {
       const json = await call();
       setResult({ ...json, barcode });
-      if (kind === "web") setWebSearchFailed(json.found === false);
     } catch (e) {
       setError((e as Error).message || "Connection error");
     } finally {
@@ -40,13 +40,35 @@ export const useProduct = (lang: string): UseProductReturn => {
     }
   }, []);
 
+  // No database knows the barcode: search the web automatically, in the same loading state
+  const lookupThenSearch = useCallback(
+    async (barcode: string): Promise<Product> => {
+      const product = await productApi.fetchByBarcode(barcode, lang);
+      if (product.found !== false) return product;
+
+      setLoadingKind("web");
+      const controller = new AbortController();
+      webSearch.current = controller;
+      const timeout = setTimeout(() => controller.abort(), WEB_SEARCH_TIMEOUT_MS);
+      try {
+        return await productApi.searchWeb(barcode, lang, controller.signal);
+      } catch {
+        // Skipped, timed out or failed: the not-found screen still offers the label photo
+        return product;
+      } finally {
+        clearTimeout(timeout);
+        webSearch.current = null;
+      }
+    },
+    [lang]
+  );
+
   const fetchProduct = useCallback(
     async (barcode: string) => {
       setResult(null);
-      setWebSearchFailed(false);
-      await run("lookup", barcode, () => productApi.fetchByBarcode(barcode, lang));
+      await run("lookup", barcode, () => lookupThenSearch(barcode));
     },
-    [lang, run]
+    [lookupThenSearch, run]
   );
 
   const analyzeLabel = useCallback(
@@ -65,16 +87,12 @@ export const useProduct = (lang: string): UseProductReturn => {
     [lang, run]
   );
 
-  const searchWeb = useCallback(
-    (barcode: string) => run("web", barcode, () => productApi.searchWeb(barcode, lang)),
-    [lang, run]
-  );
+  const skipWebSearch = useCallback(() => webSearch.current?.abort(), []);
 
   const reset = useCallback(() => {
     setResult(null);
     setError(null);
-    setWebSearchFailed(false);
   }, []);
 
-  return { result, loading, loadingKind, error, webSearchFailed, fetchProduct, analyzeLabel, searchWeb, reset };
+  return { result, loading, loadingKind, error, fetchProduct, analyzeLabel, skipWebSearch, reset };
 };

@@ -2,6 +2,7 @@ package com.healthscan.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -28,13 +29,18 @@ public class ProductLookupService {
     private final ObjectMapper mapper = new ObjectMapper();
     private final String usdaKey;
 
+    @Autowired
     public ProductLookupService() {
-        this.webClient = WebClient.builder()
+        this(WebClient.builder()
                 // Open Food Facts asks API users to identify their app
                 .defaultHeader("User-Agent", "HealthScan/1.0")
                 .codecs(c -> c.defaultCodecs().maxInMemorySize(2 * 1024 * 1024))
-                .build();
-        String key = System.getenv("USDA_API_KEY");
+                .build(), System.getenv("USDA_API_KEY"));
+    }
+
+    // Lets tests replace the product databases with a stub
+    ProductLookupService(WebClient webClient, String key) {
+        this.webClient = webClient;
         this.usdaKey = (key == null || key.isBlank()) ? "DEMO_KEY" : key;
     }
 

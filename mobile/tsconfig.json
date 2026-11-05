@@ -2,6 +2,9 @@
   "compilerOptions": {
     "target": "esnext",
     "module": "esnext",
+    "types": [
+      "jest"
+    ],
     "lib": [
       "esnext"
     ],
