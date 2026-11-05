@@ -14,9 +14,9 @@ backend/target/
 # AI service (Python)
 __pycache__/
 *.py[cod]
+.pytest_cache/
 .venv/
 venv/
-*.pt
 
 # Mobile (Expo) - see also mobile/.gitignore
 node_modules/

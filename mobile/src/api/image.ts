@@ -3,6 +3,8 @@ import { API_BASE } from "@/constants/api";
 export interface ImageAnalysisResponse {
   fruitDetected: boolean;
   fruitName: string;
+  // What the photo shows when it is not a fruit, e.g. "cell phone"
+  detectedObject?: string;
   quality: string;
   confidence: number;
   summary: string;

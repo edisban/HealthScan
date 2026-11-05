@@ -13,6 +13,6 @@ export const productApi = {
       body: JSON.stringify({ image: dataUrl }),
     }),
 
-  searchWeb: (barcode: string, lang: string): Promise<Product> =>
-    request(`/api/v1/product/${barcode}/web-search?lang=${lang}`, { method: "POST" }),
+  searchWeb: (barcode: string, lang: string, signal?: AbortSignal): Promise<Product> =>
+    request(`/api/v1/product/${barcode}/web-search?lang=${lang}`, { method: "POST", signal }),
 };

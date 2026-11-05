@@ -30,6 +30,7 @@ Health Scan is a mobile app that scans product barcodes and fruit photos and tel
 - [Configuration](#configuration)
 - [API reference](#api-reference)
 - [Project structure](#project-structure)
+- [Testing and CI/CD](#testing-and-cicd)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
 - [Acknowledgements](#acknowledgements)
@@ -38,8 +39,8 @@ Health Scan is a mobile app that scans product barcodes and fruit photos and tel
 ## Features
 
 - **Barcode scanning** – looks the product up in five free databases and scores it with an LLM: health score, summary, positives, negatives, ingredients, origin and nutrition facts.
-- **Unknown products** – if no database knows the barcode, photograph the ingredient label (read by a vision model) or search the web for it. The result is saved, so the next scan is instant.
-- **Fruit quality check** – YOLOv8 finds the fruit, a vision model rates it as fresh, spoiled or uncertain. Fruits YOLO doesn't know are identified by the vision model directly.
+- **Unknown products** – if no database knows the barcode, the app searches the web automatically, and the user can photograph the ingredient label (read by a vision model) if that fails too. The result is saved, so the next scan is instant.
+- **Fruit quality check** – a vision model identifies any fruit in a photo and rates it as fresh, spoiled or uncertain. If the photo isn't a fruit, the app says what it shows instead.
 - **Caching** – every analyzed product is stored in PostgreSQL per language.
 - **Greek and English**, light and dark theme, glassmorphism UI.
 - **Free to run** – every external service used has a free tier.
@@ -58,7 +59,6 @@ flowchart LR
         API["Backend<br/>Spring Boot :8080"]
         AI["AI service<br/>FastAPI :8000"]
         DB[("PostgreSQL :5432")]
-        YOLO["YOLOv8n<br/>(local)"]
     end
 
     subgraph External["External APIs (free tiers)"]
@@ -74,7 +74,6 @@ flowchart LR
     API --> UPC
     API --> USDA
     API -- "REST" --> AI
-    AI --> YOLO
     AI -- "OpenAI-compatible API" --> Groq
 ```
 
@@ -86,7 +85,7 @@ The phone talks only to the backend. The backend owns the database and the produ
 |-----------|-------|----------------|
 | **Mobile app** (`mobile/`) | React Native 0.88, Expo SDK 58, TypeScript | Barcode scanner, photo capture, results UI, language and theme |
 | **Backend** (`backend/`) | Java 17, Spring Boot 3.3, Spring Data JPA, WebClient | REST API, product lookup chain, caching, orchestration of AI calls |
-| **AI service** (`ai-service/`) | Python 3.11, FastAPI, Ultralytics YOLOv8, OpenAI SDK → Groq | Health scoring, label reading, web search, fruit detection and quality |
+| **AI service** (`ai-service/`) | Python 3.11, FastAPI, OpenAI SDK → Groq | Health scoring, label reading, web search, fruit quality |
 | **Database** | PostgreSQL 16 | Cache of analyzed products |
 
 **Models**
@@ -96,7 +95,6 @@ The phone talks only to the backend. The backend owns the database and the produ
 | Health score, summary, pros/cons | `openai/gpt-oss-20b` (low reasoning effort, JSON mode) | Groq |
 | Web search for unknown barcodes | `openai/gpt-oss-20b` + built-in browser search | Groq |
 | Label reading, fruit identification and quality | `qwen/qwen3.8-27b` (vision) | Groq |
-| Fruit detection (banana, apple, orange) | YOLOv8n, COCO weights, baked into the image | Locally, in the AI container |
 
 ### Barcode scan flow
 
@@ -125,14 +123,12 @@ sequenceDiagram
             API-->>App: product + source
         else not found anywhere
             API-->>App: found = false
-            Note over App: "Product not found" screen
-            opt user photographs the label
+            App->>API: POST /product/{barcode}/web-search (automatic)
+            API->>AI: POST /search-product → name + ingredients
+            opt web search also fails, user photographs the label
+                Note over App: "Product not found" screen
                 App->>API: POST /product/{barcode}/label
                 API->>AI: POST /read-label → name + ingredients
-            end
-            opt user searches the web
-                App->>API: POST /product/{barcode}/web-search
-                API->>AI: POST /search-product → name + ingredients
             end
             API->>AI: POST /analyze
             API->>DB: save
@@ -147,11 +143,7 @@ sequenceDiagram
 flowchart TD
     A[Photo from camera or library] --> B[Backend<br/>POST /analyze-image-base64]
     B --> C[AI service<br/>POST /analyze-image]
-    C --> D{YOLOv8 finds<br/>banana / apple / orange?}
-    D -- yes --> E[Crop to the fruit]
-    D -- no --> F[Use the whole photo]
-    E --> G[Downscale to 1024 px]
-    F --> G
+    C --> G[Downscale to 1024 px]
     G --> H[Vision model rates quality<br/>and names the fruit]
     H --> I{Is it a fruit?}
     I -- yes --> J[Fruit name, quality,<br/>confidence, summary]
@@ -183,7 +175,9 @@ erDiagram
 Caching rules:
 
 - A product is served from the cache only if it has a score **and** was analyzed in the requested language; otherwise it is looked up and analyzed again.
-- Barcodes that no source knows are **not** cached, so a later scan, label photo or web search can still fill them in.
+- Barcodes that no source knows are **not** cached in `products`, so a later scan, label photo or web search can still fill them in.
+- A failed web search is recorded in `web_search_misses` and not repeated for a day, which protects the Groq quota. AI outages are not recorded.
+- Label photo and web search products are in no database, so a request in the other language re-analyzes them from the cached row.
 - Concurrent scans of the same new barcode are safe: a duplicate insert is ignored and every request gets the analysis.
 - The schema is managed by Hibernate (`ddl-auto=update`).
 
@@ -206,10 +200,10 @@ flowchart TD
 
 ### Design decisions
 
-- **Separate AI service.** Python has the best ML tooling (Ultralytics, PIL), while Java/Spring handles the API and persistence. Each side can be scaled or replaced independently, and only the AI service holds the Groq key.
+- **Separate AI service.** Python suits ML and image work, while Java/Spring handles the API and persistence. Each side can be scaled or replaced independently, and only the AI service holds the Groq key.
 - **One scoring path.** Label photos and web search only *identify* the product (name and ingredients); scoring always goes through the same `/analyze` endpoint, so results are consistent regardless of source.
-- **Lookup chain, cheapest first.** Free open databases come first, rate-limited APIs later, slow AI fallbacks only on the user's request.
-- **YOLO before the vision model.** The detector crops the fruit so the vision model judges the fruit, not the background; the vision model alone handles fruits outside YOLO's classes.
+- **Lookup chain, cheapest first.** Free open databases come first, rate-limited APIs next, then an automatic web search the user can skip. The app starts the search after the lookup returns, so the first response stays fast.
+- **Vision model only for fruit.** An earlier version ran YOLOv8 first, but it only knew three fruits and saved no LLM calls, so it was removed. The user's square crop already centres the fruit.
 - **Base64 JSON uploads.** Photos are sent as base64 in JSON, which avoids multipart quirks in React Native; the image picker provides the base64 directly.
 
 ## Data sources
@@ -277,9 +271,9 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 |--------|------|------|-------------|
 | `GET` | `/product/{barcode}?lang=en\|el` | – | Look up and score a product. Returns `found: false` if no source knows it |
 | `POST` | `/product/{barcode}/label?lang=` | `{"image": "<base64>"}` | Identify a product from a label photo |
-| `POST` | `/product/{barcode}/web-search?lang=` | – | Search the web for the barcode (slow, ~10–30 s) |
-| `POST` | `/analyze-image` | multipart `file` | Fruit detection and quality |
-| `POST` | `/analyze-image-base64` | `{"image": "<base64>"}` | Fruit detection and quality |
+| `POST` | `/product/{barcode}/web-search?lang=` | – | Search the web for the barcode (slow, ~10–30 s). The app calls this automatically; misses are remembered for a day |
+| `POST` | `/analyze-image` | multipart `file` | Fruit identification and quality |
+| `POST` | `/analyze-image-base64` | `{"image": "<base64>"}` | Fruit identification and quality |
 
 <details>
 <summary>Example product response</summary>
@@ -308,7 +302,7 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/analyze` | Health score, summary, pros/cons from name + ingredients |
-| `POST` | `/analyze-image` | Fruit detection and quality |
+| `POST` | `/analyze-image` | Fruit identification and quality |
 | `POST` | `/read-label` | Extract product name and ingredients from a label photo |
 | `POST` | `/search-product` | Find a product by barcode on the web |
 | `GET` | `/health` | Health check |
@@ -321,7 +315,7 @@ Interactive docs are available at `http://localhost:8000/docs` (FastAPI Swagger 
 .
 ├── docker-compose.yml
 ├── .env.example
-├── ai-service/                # FastAPI: YOLO + Groq
+├── ai-service/                # FastAPI + Groq
 │   ├── main.py
 │   ├── requirements.txt
 │   └── Dockerfile
@@ -347,13 +341,25 @@ Interactive docs are available at `http://localhost:8000/docs` (FastAPI Swagger 
         └── utils/             # photo capture and encoding
 ```
 
+## Testing and CI/CD
+
+No test needs an API key or a network connection: the product databases, the AI service and Groq are all stubbed.
+
+```bash
+cd backend && mvn test                                                # JUnit, Mockito, MockMvc
+cd ai-service && pip install -r requirements-dev.txt && python -m pytest
+cd mobile && npm test && npm run typecheck                            # Jest, React Native Testing Library
+```
+
+[GitHub Actions](.github/workflows/ci.yml) runs all three suites and the type check on every push to `main` or `master` and on every pull request, then builds both Docker images. Pushes to the default branch also publish the images to GitHub Container Registry as `ghcr.io/<owner>/healthscan-backend` and `ghcr.io/<owner>/healthscan-ai-service`, tagged with the commit SHA and `latest`.
+
 ## Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
 | Phone can't connect | `EXPO_PUBLIC_API_BASE` must use your computer's LAN IP (not `localhost`); restart `npm start` after changing it; phone and computer on the same Wi-Fi; allow ports 8080 and 8085 in the firewall |
 | No health score | Check `GROQ_API_KEY` in `.env`, then `docker compose up -d --build` |
-| Product not found | Use the label photo option; small or regional brands are often missing from public databases |
+| Product not found | The web search runs first; if it fails, use the label photo. Small or regional brands are often missing from public databases |
 | Expo Go asks to sign in to Expo CLI | Run `npx expo login` (or set `EXPO_TOKEN`) with the same account as the phone |
 | Containers not running | `docker compose ps` and `docker compose logs backend` |
 
@@ -363,13 +369,13 @@ Interactive docs are available at `http://localhost:8000/docs` (FastAPI Swagger 
 - [ ] Category-specific scoring for cosmetics and non-food products
 - [ ] Nutri-Score and NOVA group from Open Food Facts
 - [ ] Contribute label-photo results back to Open Food Facts
-- [ ] Automated tests and CI
+- [ ] Deploy the published images to a hosted environment
 
 ## Acknowledgements
 
 - Product data from [Open Food Facts](https://world.openfoodfacts.org), [Open Beauty Facts](https://world.openbeautyfacts.org) and [Open Products Facts](https://world.openproductsfacts.org), available under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/).
 - Additional data from [UPCitemdb](https://www.upcitemdb.com) and [USDA FoodData Central](https://fdc.nal.usda.gov).
-- Object detection by [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics); language and vision models served by [Groq](https://groq.com).
+- Language and vision models served by [Groq](https://groq.com).
 
 ## License
 
