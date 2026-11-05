@@ -60,9 +60,7 @@ export interface AppStrings {
   labelPhotoSub: string;
   labelLibrary: string;
   labelLibrarySub: string;
-  webSearch: string;
-  webSearchSub: string;
-  webSearchFailed: string;
+  webSearchSkip: string;
   labelLoading: string;
   labelLoadingSub: string;
   webLoading: string;
@@ -126,14 +124,12 @@ export const strings: Record<string, AppStrings> = {
     photoLoading: "Ανάλυση φωτογραφίας…",
     photoError: "Σφάλμα ανάλυσης φωτογραφίας",
     notFoundTitle: "Το προϊόν δεν βρέθηκε",
-    notFoundSub: "Δεν υπάρχει ακόμα σε καμία βάση δεδομένων. Βοήθησέ μας να το αναγνωρίσουμε:",
+    notFoundSub: "Δεν μπορέσαμε να το αναγνωρίσουμε αυτόματα. Φωτογράφισε την ετικέτα για να τη διαβάσουμε:",
     labelPhoto: "Φωτογράφισε τα συστατικά",
     labelPhotoSub: "Το AI διαβάζει την ετικέτα · πιο αξιόπιστο",
     labelLibrary: "Ετικέτα από τη βιβλιοθήκη",
     labelLibrarySub: "Χρησιμοποίησε υπάρχουσα φωτογραφία",
-    webSearch: "Αναζήτηση στο διαδίκτυο",
-    webSearchSub: "Διαρκεί έως 30 δευτερόλεπτα",
-    webSearchFailed: "Δεν βρέθηκε ούτε στο διαδίκτυο. Δοκίμασε μια φωτογραφία της ετικέτας.",
+    webSearchSkip: "Παράλειψη και φωτογραφία ετικέτας",
     labelLoading: "Ανάγνωση ετικέτας",
     labelLoadingSub: "Το AI διαβάζει τα συστατικά…",
     webLoading: "Αναζήτηση στο διαδίκτυο",
@@ -195,14 +191,12 @@ export const strings: Record<string, AppStrings> = {
     photoLoading: "Analyzing photo…",
     photoError: "Image analysis error",
     notFoundTitle: "Product not found",
-    notFoundSub: "It isn't in any product database yet. Help us identify it:",
+    notFoundSub: "We couldn't identify it automatically. Photograph the label and we'll read it:",
     labelPhoto: "Photograph the ingredients",
     labelPhotoSub: "AI reads the label · most reliable",
     labelLibrary: "Label from library",
     labelLibrarySub: "Use an existing photo",
-    webSearch: "Search the web",
-    webSearchSub: "Takes up to 30 seconds",
-    webSearchFailed: "Not found on the web either. Try a photo of the label.",
+    webSearchSkip: "Skip and use a label photo",
     labelLoading: "Reading the label",
     labelLoadingSub: "AI is reading the ingredients…",
     webLoading: "Searching the web",

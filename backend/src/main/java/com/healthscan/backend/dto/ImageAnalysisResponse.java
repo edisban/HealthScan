@@ -6,6 +6,8 @@ public class ImageAnalysisResponse {
     private String quality;  // "good" | "bad" | "uncertain"
     private double confidence;
     private String summary;
+    // What the photo shows when it is not a fruit, e.g. "cell phone"
+    private String detectedObject = "";
 
     public ImageAnalysisResponse() {}
 
@@ -27,4 +29,6 @@ public class ImageAnalysisResponse {
     public void setConfidence(double confidence) { this.confidence = confidence; }
     public String getSummary() { return summary; }
     public void setSummary(String summary) { this.summary = summary; }
+    public String getDetectedObject() { return detectedObject; }
+    public void setDetectedObject(String detectedObject) { this.detectedObject = detectedObject; }
 }

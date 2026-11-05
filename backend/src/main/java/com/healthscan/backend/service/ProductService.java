@@ -6,8 +6,11 @@ import com.healthscan.backend.dto.AiAnalyzeRequest;
 import com.healthscan.backend.dto.AiAnalyzeResponse;
 import com.healthscan.backend.dto.ProductResponse;
 import com.healthscan.backend.entity.Product;
+import com.healthscan.backend.entity.WebSearchMiss;
 import com.healthscan.backend.repository.ProductRepository;
+import com.healthscan.backend.repository.WebSearchMissRepository;
 import com.healthscan.backend.service.ProductLookupService.ProductInfo;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.client.reactive.ClientHttpRequest;
@@ -19,21 +22,36 @@ import org.springframework.web.reactive.function.BodyInserter;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 public class ProductService {
 
+    // How long a failed web search is remembered before the barcode may be searched again
+    private static final Duration WEB_SEARCH_RETRY_AFTER = Duration.ofDays(1);
+    private static final Duration AI_CALL_TIMEOUT = Duration.ofSeconds(60);
+
     private final ProductRepository repo;
+    private final WebSearchMissRepository missRepo;
     private final ProductLookupService lookupService;
     private final WebClient webClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    public ProductService(ProductRepository repo, ProductLookupService lookupService) {
+    @Autowired
+    public ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService) {
+        this(repo, missRepo, lookupService, WebClient.builder().build());
+    }
+
+    // Lets tests replace the AI service with a stub
+    ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService, WebClient webClient) {
         this.repo = repo;
+        this.missRepo = missRepo;
         this.lookupService = lookupService;
-        this.webClient = WebClient.builder().build();
+        this.webClient = webClient;
     }
 
     public ProductResponse analyzeProduct(String barcode, String lang) {
@@ -44,6 +62,10 @@ public class ProductService {
         }
 
         ProductInfo info = lookupService.lookup(barcode);
+        // Label photo and web search products are in no database; re-analyze them from the cached row
+        if (info == null && cached != null) {
+            info = new ProductInfo(cached.getName(), "", cached.getImageUrl(), cached.getIngredientsText(), cached.getSource());
+        }
         // Not in any database; don't cache, so a later scan, label photo or web search can still fill it in
         return info == null ? notFound(barcode) : saveAndAnalyze(cached, barcode, info, lang);
     }
@@ -63,10 +85,30 @@ public class ProductService {
         return fromIdentity(barcode, identity, "Label photo", lang);
     }
 
-    /** Asks the AI service to find the barcode on the web (slow, so only on request). */
+    /** Asks the AI service to find the barcode on the web; the app calls this after every database misses. */
     public ProductResponse searchWeb(String barcode, String lang) {
+        // Never replace a known product with a web match
+        if (repo.findByBarcode(barcode).isPresent()) return analyzeProduct(barcode, lang);
+        if (searchedRecently(barcode)) return notFound(barcode);
+
         JsonNode identity = callAi("/search-product", BodyInserters.fromValue(new SearchRequest(barcode)));
+        // Only a real "no match" is remembered; null means the AI service failed, so a retry may still work
+        if (identity != null && !identity.path("found").asBoolean(false)) rememberMiss(barcode);
         return fromIdentity(barcode, identity, "Web search", lang);
+    }
+
+    private boolean searchedRecently(String barcode) {
+        Objects.requireNonNull(barcode);
+        Instant cutoff = Instant.now().minus(WEB_SEARCH_RETRY_AFTER);
+        return missRepo.findById(barcode).filter(miss -> miss.getSearchedAt().isAfter(cutoff)).isPresent();
+    }
+
+    private void rememberMiss(String barcode) {
+        try {
+            missRepo.save(new WebSearchMiss(barcode, Instant.now()));
+        } catch (DataIntegrityViolationException duplicate) {
+            // A concurrent search recorded the same miss first
+        }
     }
 
     private ProductResponse fromIdentity(String barcode, JsonNode identity, String source, String lang) {
@@ -86,7 +128,7 @@ public class ProductService {
     private JsonNode callAi(String path, @NonNull BodyInserter<?, ? super ClientHttpRequest> body) {
         try {
             return webClient.post().uri(aiBaseUrl() + path).body(body)
-                    .retrieve().bodyToMono(JsonNode.class).block();
+                    .retrieve().bodyToMono(JsonNode.class).block(AI_CALL_TIMEOUT);
         } catch (Exception e) {
             return null;
         }

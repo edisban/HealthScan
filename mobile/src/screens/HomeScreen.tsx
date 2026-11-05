@@ -37,10 +37,9 @@ export const HomeScreen = () => {
     loading,
     loadingKind,
     error,
-    webSearchFailed,
     fetchProduct,
     analyzeLabel,
-    searchWeb,
+    skipWebSearch,
     reset,
   } = useProduct(lang);
   const {
@@ -212,6 +211,11 @@ export const HomeScreen = () => {
                     : strings.loadingSub}
                 </Text>
               )}
+              {loading && loadingKind === "web" && (
+                <Button variant="ghost" onPress={skipWebSearch} style={styles.fullWidth}>
+                  {strings.webSearchSkip}
+                </Button>
+              )}
             </Card>
           </View>
         )}
@@ -238,12 +242,10 @@ export const HomeScreen = () => {
             {result.found === false ? (
               <NotFound
                 barcode={result.barcode}
-                webSearchFailed={webSearchFailed}
                 strings={strings}
                 theme={theme}
                 onLabelPhoto={() => analyzeLabel(result.barcode, "camera")}
                 onLabelLibrary={() => analyzeLabel(result.barcode, "library")}
-                onWebSearch={() => searchWeb(result.barcode)}
               />
             ) : (
               <ProductResult result={result} strings={strings} theme={theme} />
@@ -414,31 +416,18 @@ const sourceIcon = (source: string): IconName =>
 
 type NotFoundProps = {
   barcode: string;
-  webSearchFailed: boolean;
   strings: AppStrings;
   theme: Theme;
   onLabelPhoto: () => void;
   onLabelLibrary: () => void;
-  onWebSearch: () => void;
 };
 
-const NotFound = ({
-  barcode,
-  webSearchFailed,
-  strings,
-  theme,
-  onLabelPhoto,
-  onLabelLibrary,
-  onWebSearch,
-}: NotFoundProps) => {
+const NotFound = ({ barcode, strings, theme, onLabelPhoto, onLabelLibrary }: NotFoundProps) => {
   const { text } = theme.palette;
   const options: { icon: IconName; title: string; sub: string; color: string; onPress: () => void }[] = [
     { icon: "camera", title: strings.labelPhoto, sub: strings.labelPhotoSub, color: theme.palette.primary.main, onPress: onLabelPhoto },
     { icon: "images", title: strings.labelLibrary, sub: strings.labelLibrarySub, color: theme.palette.accent.main, onPress: onLabelLibrary },
   ];
-  if (!webSearchFailed) {
-    options.push({ icon: "globe-outline", title: strings.webSearch, sub: strings.webSearchSub, color: "#06b6d4", onPress: onWebSearch });
-  }
 
   return (
     <Card style={styles.notFoundCard}>
@@ -449,11 +438,6 @@ const NotFound = ({
       <View style={styles.notFoundChip}>
         <Chip label={barcode} icon="barcode-outline" />
       </View>
-      {webSearchFailed && (
-        <View style={[styles.infoBox, styles.notFoundNote, { backgroundColor: theme.palette.warning.soft, borderColor: theme.palette.warning.main + "44" }]}>
-          <Text style={[styles.body, { color: text.primary }]}>{strings.webSearchFailed}</Text>
-        </View>
-      )}
       <Text style={[styles.stateSub, styles.notFoundSub, { color: text.secondary }]}>{strings.notFoundSub}</Text>
       {options.map((o) => (
         <TouchableOpacity
@@ -491,7 +475,9 @@ const FruitResult = ({ result, strings, theme }: FruitResultProps) => {
       ? { color: theme.palette.error.main, label: strings.qualityBad, icon: "close-circle" as IconName }
       : { color: theme.palette.warning.main, label: strings.qualityUncertain, icon: "help-circle" as IconName };
   const confidence = Math.round(result.confidence);
-  const name = result.fruitName ? result.fruitName.charAt(0).toUpperCase() + result.fruitName.slice(1) : "";
+  // Not a fruit: the title names what the photo shows instead
+  const title = result.fruitName || result.detectedObject || "";
+  const name = title ? title.charAt(0).toUpperCase() + title.slice(1) : "";
 
   return (
     <Card style={styles.noPad}>
@@ -852,7 +838,6 @@ const styles = StyleSheet.create({
 
   notFoundCard: { alignItems: "center", paddingTop: 26 },
   notFoundChip: { marginTop: 10 },
-  notFoundNote: { alignSelf: "stretch", marginTop: 6, marginBottom: 4 },
   notFoundSub: { marginBottom: 14 },
   fullWidthOption: { alignSelf: "stretch" },
 
