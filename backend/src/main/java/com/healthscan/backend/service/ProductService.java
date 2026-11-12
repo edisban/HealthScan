@@ -54,8 +54,10 @@ public class ProductService {
 
     public ProductResponse analyzeProduct(String barcode, String lang) {
         Product cached = repo.findByBarcode(barcode).orElse(null);
-        // Re-analyze products cached without a score (e.g. AI service was down last time) or in another language
-        if (cached != null && cached.getHealthScore() != null && lang.equals(cached.getLang())) {
+        // Re-analyze products cached without a score (e.g. AI service was down last time), in another language,
+        // or saved before scores were calculated from Nutri-Score (no scoreSource yet)
+        if (cached != null && cached.getHealthScore() != null && cached.getScoreSource() != null
+                && lang.equals(cached.getLang())) {
             return toResponse(cached);
         }
 

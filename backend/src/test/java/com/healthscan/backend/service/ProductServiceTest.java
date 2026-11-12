@@ -72,6 +72,7 @@ class ProductServiceTest {
         product.setHealthScore(score);
         product.setLang(lang);
         product.setSource(source);
+        product.setScoreSource("AI estimate");
         return product;
     }
 
@@ -98,6 +99,21 @@ class ProductServiceTest {
         assertThat(response.getHealthScore()).isEqualTo(40);
         verify(lookup, never()).lookup(any());
         assertThat(aiCalls).isEmpty();
+    }
+
+    @Test
+    void rowSavedBeforeCalculatedScoresIsAnalyzedAgain() {
+        Product old = row(40, "en", "Open Food Facts");
+        old.setScoreSource(null);
+        givenRow(old);
+        when(lookup.lookup(BARCODE)).thenReturn(
+                new ProductInfo("Db name", "Fage", "", "milk", "Open Food Facts", "b", 1, 0));
+        aiReplies.put("/analyze", ANALYSIS);
+
+        ProductResponse response = service.analyzeProduct(BARCODE, "en");
+
+        assertThat(response.getHealthScore()).isEqualTo(72);
+        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
     }
 
     @Test

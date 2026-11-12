@@ -34,7 +34,9 @@ public class ApiKeyFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
-        return expectedKey.length == 0 || !request.getRequestURI().startsWith("/api/");
+        // Browser CORS preflights (OPTIONS) cannot carry the key; they never reach a handler
+        return expectedKey.length == 0 || !request.getRequestURI().startsWith("/api/")
+                || "OPTIONS".equals(request.getMethod());
     }
 
     @Override

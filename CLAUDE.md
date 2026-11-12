@@ -52,7 +52,24 @@ cp .env.example .env                  # set GROQ_API_KEY, POSTGRES_PASSWORD, AI_
 docker compose up -d --build          # only the backend is published, on :8080 (BACKEND_PORT)
 ```
 
-No test needs an API key or network access: the product databases, the AI service and Groq are stubbed.
+No unit test needs an API key or network access: the product databases, the AI service and Groq are stubbed.
+`mvn verify` also runs the Testcontainers tests (skipped without Docker) and fails below 80% line coverage.
+To give Testcontainers Docker inside the Maven container, add
+`-v /var/run/docker.sock:/var/run/docker.sock -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal`.
+
+### End-to-end (`e2e/`, Playwright)
+
+Runs against the real stack in mock mode (no Groq key needed):
+
+```bash
+export MOCK_AI=1 POSTGRES_PASSWORD=e2e AI_SHARED_SECRET=e2e API_KEY=e2e-key CORS_ALLOWED_ORIGINS=http://localhost:8081
+docker compose up -d --build --wait
+(cd mobile && EXPO_PUBLIC_API_BASE=http://localhost:8080 EXPO_PUBLIC_API_KEY=e2e-key npm run build:web)
+cd e2e && npm ci && npx playwright install chromium && npx playwright test
+npm run screenshots           # also refreshes docs/screenshots for the README
+```
+
+The rate-limit test uses up the per-IP budget for a minute; wait a minute before running the suite again.
 
 ## Rules
 

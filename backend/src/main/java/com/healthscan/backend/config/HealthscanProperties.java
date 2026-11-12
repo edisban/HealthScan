@@ -4,6 +4,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 import org.springframework.util.unit.DataSize;
 
+import java.util.List;
+
 /** All app settings under {@code healthscan.*}, bound once and injected where needed. */
 @ConfigurationProperties(prefix = "healthscan")
 public record HealthscanProperties(
@@ -13,7 +15,9 @@ public record HealthscanProperties(
         @DefaultValue("") String apiKey,
         @DefaultValue("http://localhost:8000") String aiServiceUrl,
         // Sent to the AI service in X-Internal-Secret; empty sends nothing
-        @DefaultValue("") String aiSharedSecret) {
+        @DefaultValue("") String aiSharedSecret,
+        // Origins of the web app allowed to call /api/** from a browser; empty turns CORS off
+        @DefaultValue List<String> corsAllowedOrigins) {
 
     /** Requests per minute per client IP; "strict" covers the endpoints that call Groq. */
     public record RateLimit(@DefaultValue("10") int strictPerMinute,
