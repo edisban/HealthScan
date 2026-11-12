@@ -62,7 +62,8 @@ public class ProductService {
         ProductInfo info = lookupService.lookup(barcode);
         // Label photo and web search products are in no database; re-analyze them from the cached row
         if (info == null && cached != null) {
-            info = new ProductInfo(cached.getName(), "", cached.getImageUrl(), cached.getIngredientsText(), cached.getSource());
+            info = new ProductInfo(cached.getName(), "", cached.getImageUrl(), cached.getIngredientsText(), cached.getSource(),
+                    cached.getNutriScore(), cached.getNovaGroup(), cached.getAdditivesCount());
         }
         // Not in any database; don't cache, so a later scan, label photo or web search can still fill it in
         return info == null ? notFound(barcode) : saveAndAnalyze(cached, barcode, info, lang);
@@ -147,10 +148,21 @@ public class ProductService {
         product.setImageUrl(info.imageUrl());
         product.setIngredientsText(info.ingredients());
         product.setSource(info.source());
+        product.setNutriScore(info.nutriScore());
+        product.setNovaGroup(info.novaGroup());
+        product.setAdditivesCount(info.additives());
         String aiName = info.brand().isEmpty() || info.name().toLowerCase().contains(info.brand().toLowerCase())
                 ? info.name()
                 : info.brand() + " " + info.name();
-        analyzeWithAi(product, aiName, lang);
+        Integer fixedScore = HealthScore.fromOpenFoodFacts(info.nutriScore(), info.novaGroup(), info.additives());
+        analyzeWithAi(product, aiName, lang, fixedScore);
+        if (fixedScore != null) {
+            // The calculated score always wins, even if the AI returned another number or was down
+            product.setHealthScore(fixedScore);
+            product.setScoreSource(HealthScore.NUTRI_SCORE);
+        } else {
+            product.setScoreSource(product.getHealthScore() != null ? HealthScore.AI_ESTIMATE : null);
+        }
         try {
             repo.save(product);
         } catch (DataIntegrityViolationException e) {
@@ -162,11 +174,13 @@ public class ProductService {
     }
 
     /** Fills score, summary and details from the AI service; leaves them empty if it is unavailable. */
-    private void analyzeWithAi(Product product, String name, String lang) {
+    private void analyzeWithAi(Product product, String name, String lang, Integer fixedScore) {
         String ingredients = product.getIngredientsText() == null ? "" : product.getIngredientsText();
         List<String> ingredientList = ingredients.isEmpty() ? List.of() : Arrays.asList(ingredients.split(","));
         try {
             AiAnalyzeRequest aiReq = new AiAnalyzeRequest(product.getBarcode(), name, ingredientList, lang);
+            aiReq.setFixedScore(fixedScore);
+            aiReq.setFacts(HealthScore.describe(product.getNutriScore(), product.getNovaGroup(), product.getAdditivesCount()));
             AiAnalyzeResponse aiRes = webClient.post()
                     .uri("/analyze")
                     .bodyValue(aiReq)
@@ -200,6 +214,9 @@ public class ProductService {
                 readList(product.getProsJson()),
                 readList(product.getConsJson()));
         res.setSource(product.getSource() != null ? product.getSource() : "");
+        res.setScoreSource(product.getScoreSource() != null ? product.getScoreSource() : "");
+        res.setNutriScore(product.getNutriScore() != null ? product.getNutriScore() : "");
+        res.setNovaGroup(product.getNovaGroup());
         return res;
     }
 

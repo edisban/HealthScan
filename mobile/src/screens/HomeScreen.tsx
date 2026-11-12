@@ -365,6 +365,9 @@ const ProductResult = ({ result, strings, theme }: ProductResultProps) => {
         </View>
         <View style={[styles.divider, { backgroundColor: theme.palette.border }]} />
         <Gauge score={score} label={label} caption={strings.healthScore} />
+        {!!result.scoreSource && (
+          <Text style={[styles.scoreBasis, { color: text.muted }]}>{scoreBasis(result, strings)}</Text>
+        )}
       </Card>
 
       <Card>
@@ -407,8 +410,17 @@ const ProductResult = ({ result, strings, theme }: ProductResultProps) => {
           </View>
         </Card>
       )}
+      <Text style={[styles.disclaimer, { color: text.muted }]}>{strings.disclaimer}</Text>
     </>
   );
+};
+
+// "Calculated from Nutri-Score C · NOVA 4" or "AI estimate"
+const scoreBasis = (result: ProductResultProps["result"], strings: AppStrings): string => {
+  if (result.scoreSource !== "Nutri-Score") return strings.scoreEstimated;
+  const grade = result.nutriScore ? ` ${result.nutriScore.toUpperCase()}` : "";
+  const nova = result.novaGroup ? ` · NOVA ${result.novaGroup}` : "";
+  return `${strings.scoreFromNutriScore}${grade}${nova}`;
 };
 
 const sourceIcon = (source: string): IconName =>
@@ -826,6 +838,8 @@ const styles = StyleSheet.create({
   productName: { fontSize: 19, fontWeight: "800", letterSpacing: -0.3, marginBottom: 8 },
   chipRow: { flexDirection: "row", flexWrap: "wrap" },
   divider: { height: 1, marginVertical: 16 },
+  scoreBasis: { textAlign: "center", fontSize: 12, fontWeight: "600", marginTop: 10 },
+  disclaimer: { textAlign: "center", fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 16, paddingHorizontal: 8 },
 
   cardTitleRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   cardTitleIcon: { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center", marginRight: 10 },

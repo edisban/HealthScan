@@ -32,8 +32,23 @@ public class Product {
     private String prosJson;
     @Column(columnDefinition = "text")
     private String consJson;
+    // From Open Food Facts; the score is calculated from them when the grade is present
+    private String nutriScore;
+    private Integer novaGroup;
+    private Integer additivesCount;
+    // "Nutri-Score" when calculated, "AI estimate" otherwise
+    private String scoreSource;
 
     public Product() {}
+
+    public String getNutriScore() { return nutriScore; }
+    public void setNutriScore(String nutriScore) { this.nutriScore = nutriScore; }
+    public Integer getNovaGroup() { return novaGroup; }
+    public void setNovaGroup(Integer novaGroup) { this.novaGroup = novaGroup; }
+    public Integer getAdditivesCount() { return additivesCount; }
+    public void setAdditivesCount(Integer additivesCount) { this.additivesCount = additivesCount; }
+    public String getScoreSource() { return scoreSource; }
+    public void setScoreSource(String scoreSource) { this.scoreSource = scoreSource; }
 
     public String getLang() { return lang; }
     public void setLang(String lang) { this.lang = lang; }

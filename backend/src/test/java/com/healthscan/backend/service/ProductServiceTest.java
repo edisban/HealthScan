@@ -247,6 +247,46 @@ class ProductServiceTest {
     }
 
     @Test
+    void nutriScoreProductGetsTheCalculatedScoreNotTheAiNumber() {
+        when(lookup.lookup(BARCODE)).thenReturn(
+                new ProductInfo("Db name", "Fage", "", "milk", "Open Food Facts", "c", 4, 3));
+        aiReplies.put("/analyze", ANALYSIS);
+
+        ProductResponse response = service.analyzeProduct(BARCODE, "en");
+
+        // 55 for grade C, minus 10 for NOVA 4, minus 6 for three additives; the AI said 72
+        assertThat(response.getHealthScore()).isEqualTo(39);
+        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
+        assertThat(response.getNutriScore()).isEqualTo("c");
+        assertThat(response.getNovaGroup()).isEqualTo(4);
+        assertThat(response.getExplanation()).isEqualTo("Fine");
+    }
+
+    @Test
+    void calculatedScoreSurvivesAnAiOutage() {
+        when(lookup.lookup(BARCODE)).thenReturn(
+                new ProductInfo("Db name", "Fage", "", "milk", "Open Food Facts", "a", 1, 0));
+
+        ProductResponse response = service.analyzeProduct(BARCODE, "en");
+
+        assertThat(response.getHealthScore()).isEqualTo(90);
+        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
+        // No language is stored, so the next scan asks the AI again for the text
+        assertThat(savedProduct().getLang()).isNull();
+    }
+
+    @Test
+    void productWithoutNutriScoreIsMarkedAsAnAiEstimate() {
+        givenDatabaseHit();
+        aiReplies.put("/analyze", ANALYSIS);
+
+        ProductResponse response = service.analyzeProduct(BARCODE, "en");
+
+        assertThat(response.getHealthScore()).isEqualTo(72);
+        assertThat(response.getScoreSource()).isEqualTo("AI estimate");
+    }
+
+    @Test
     void unreadableLabelIsNotFound() {
         aiReplies.put("/read-label", NO_MATCH);
 

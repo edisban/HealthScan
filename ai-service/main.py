@@ -4,7 +4,7 @@ import os
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Union
+from typing import List, Optional, Union
 from PIL import Image
 
 try:
@@ -48,6 +48,9 @@ class AnalyzeRequest(BaseModel):
     name: str = "Unknown Product"
     ingredients: Union[str, List[str]] = ""
     lang: str = "el"
+    # Set by the backend when the score comes from Nutri-Score data; the model must keep it and only explain it
+    fixedScore: Optional[int] = None
+    facts: str = ""
 
 
 class AnalyzeResponse(BaseModel):
@@ -99,7 +102,13 @@ def analyze(req: AnalyzeRequest):
     if isinstance(ingredients, list):
         ingredients = ", ".join(ingredients)
     lang_instr = "Respond in Greek." if req.lang == "el" else "Respond in English."
-    user_msg = f"Product: {req.name}\nBarcode: {req.barcode}\nIngredients: {ingredients}\n{lang_instr}"
+    user_msg = f"Product: {req.name}\nBarcode: {req.barcode}\nIngredients: {ingredients}\n"
+    if req.facts:
+        user_msg += f"Open Food Facts data: {req.facts}\n"
+    if req.fixedScore is not None:
+        user_msg += (f"The health score is fixed at {req.fixedScore}, calculated from that data. "
+                     "Use exactly this value as healthScore and explain it; do not change it.\n")
+    user_msg += lang_instr
     completion = client.chat.completions.create(
         model=TEXT_MODEL,
         messages=[
@@ -116,7 +125,8 @@ def analyze(req: AnalyzeRequest):
     data = json.loads(completion.choices[0].message.content)
     return AnalyzeResponse(
         barcode=req.barcode,
-        healthScore=int(data.get("healthScore", 50)),
+        # A fixed score is never overridden by the model
+        healthScore=req.fixedScore if req.fixedScore is not None else int(data.get("healthScore", 50)),
         summary=data.get("summary", ""),
         pros=data.get("pros", []),
         cons=data.get("cons", []),

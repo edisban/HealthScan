@@ -139,6 +139,34 @@ def test_analyze_accepts_an_ingredient_list(api, groq):
     assert "Ingredients: milk, sugar" in groq.requests[0]["messages"][1]["content"]
 
 
+def test_fixed_score_is_kept_even_if_the_model_returns_another(api, groq):
+    groq.reply = '{"healthScore": 80, "summary": "Explained"}'
+
+    body = api.post("/analyze", json={"barcode": "1", "fixedScore": 39, "facts": "Nutri-Score C, NOVA group 4"}).json()
+
+    assert body["healthScore"] == 39
+    assert body["summary"] == "Explained"
+
+
+def test_fixed_score_and_facts_are_given_to_the_model(api, groq):
+    groq.reply = '{"healthScore": 39, "summary": ""}'
+
+    api.post("/analyze", json={"barcode": "1", "fixedScore": 39, "facts": "Nutri-Score C, NOVA group 4"})
+
+    prompt = groq.requests[0]["messages"][1]["content"]
+    assert "Open Food Facts data: Nutri-Score C, NOVA group 4" in prompt
+    assert "fixed at 39" in prompt
+
+
+def test_without_a_fixed_score_the_model_scores(api, groq):
+    groq.reply = '{"healthScore": 64, "summary": ""}'
+
+    body = api.post("/analyze", json={"barcode": "1"}).json()
+
+    assert body["healthScore"] == 64
+    assert "fixed at" not in groq.requests[0]["messages"][1]["content"]
+
+
 def test_analyze_without_a_key_is_unavailable(api, no_groq):
     assert api.post("/analyze", json={"barcode": "1"}).status_code == 503
 

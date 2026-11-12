@@ -7,6 +7,10 @@ public class AiAnalyzeRequest {
     private String name;
     private List<String> ingredients;
     private String lang = "el";
+    // When set, the AI must use this score and only explain it
+    private Integer fixedScore;
+    // Facts behind the fixed score, e.g. "Nutri-Score C, NOVA group 4, 3 additives"
+    private String facts = "";
 
     public AiAnalyzeRequest() {}
     public AiAnalyzeRequest(String barcode, String name, List<String> ingredients) {
@@ -26,4 +30,8 @@ public class AiAnalyzeRequest {
     public void setIngredients(List<String> ingredients) { this.ingredients = ingredients; }
     public String getLang() { return lang; }
     public void setLang(String lang) { this.lang = lang; }
+    public Integer getFixedScore() { return fixedScore; }
+    public void setFixedScore(Integer fixedScore) { this.fixedScore = fixedScore; }
+    public String getFacts() { return facts; }
+    public void setFacts(String facts) { this.facts = facts; }
 }

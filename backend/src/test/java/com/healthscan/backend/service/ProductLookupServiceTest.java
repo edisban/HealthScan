@@ -115,6 +115,29 @@ class ProductLookupServiceTest {
     }
 
     @Test
+    void readsNutriScoreNovaAndAdditivesFromOpenFoodFacts() {
+        replies.put(FOOD, """
+                {"status":1,"product":{"product_name":"Yogurt","nutriscore_grade":"B","nova_group":3,"additives_n":2}}""");
+
+        ProductInfo info = service.lookup(BARCODE);
+
+        assertThat(info.nutriScore()).isEqualTo("b");
+        assertThat(info.novaGroup()).isEqualTo(3);
+        assertThat(info.additives()).isEqualTo(2);
+    }
+
+    @Test
+    void unknownNutriScoreGradeIsIgnored() {
+        replies.put(FOOD, """
+                {"status":1,"product":{"product_name":"Water","nutriscore_grade":"not-applicable"}}""");
+
+        ProductInfo info = service.lookup(BARCODE);
+
+        assertThat(info.nutriScore()).isEmpty();
+        assertThat(info.novaGroup()).isNull();
+    }
+
+    @Test
     void unknownEverywhereReturnsNull() {
         assertThat(service.lookup(BARCODE)).isNull();
         assertThat(hostsCalled).containsExactly(FOOD, BEAUTY, PRODUCTS, UPC, USDA);

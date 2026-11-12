@@ -14,6 +14,10 @@ export interface Product {
   found?: boolean;
   // e.g. "Open Food Facts", "Label photo", "Web search"
   source?: string;
+  // "Nutri-Score" when the score is calculated from Open Food Facts data, "AI estimate" otherwise
+  scoreSource?: string;
+  nutriScore?: string;
+  novaGroup?: number | null;
 }
 
 export interface ApiError extends Error {
