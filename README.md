@@ -351,7 +351,7 @@ cd ai-service && pip install -r requirements-dev.txt && python -m pytest
 cd mobile && npm test && npm run typecheck                            # Jest, React Native Testing Library
 ```
 
-[GitHub Actions](.github/workflows/ci.yml) runs all three suites and the type check on every push to `main` or `master` and on every pull request, then builds both Docker images. Pushes to the default branch also publish the images to GitHub Container Registry as `ghcr.io/<owner>/healthscan-backend` and `ghcr.io/<owner>/healthscan-ai-service`, tagged with the commit SHA and `latest`.
+[GitHub Actions](.github/workflows/ci.yml) runs all three suites and the type check on every push to `main` and on every pull request, then builds both Docker images. Pushes to the default branch also publish the images to GitHub Container Registry as `ghcr.io/<owner>/healthscan-backend` and `ghcr.io/<owner>/healthscan-ai-service`, tagged with the commit SHA and `latest`.
 
 ## Troubleshooting
 
