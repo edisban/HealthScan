@@ -1,0 +1,48 @@
+# HTTPS reverse proxy in front of the backend (docker compose --profile https up).
+# The official nginx image fills in ${DOMAIN} when the container starts.
+
+# Plain HTTP: only Let's Encrypt's domain check; everything else is redirected to HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+    server_tokens off;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+    server_tokens off;
+
+    # Kept up to date by the certbot container (a temporary self-signed one until the first real one)
+    ssl_certificate     /etc/letsencrypt/active/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/active/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    # Slightly above the backend's 8 MB image limit, which answers with a clear 413
+    client_max_body_size 9m;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header Referrer-Policy "no-referrer" always;
+
+    location / {
+        proxy_pass http://backend:8080;
+        proxy_set_header Host $host;
+        # Replaces any client-sent value, so a client cannot fake its address to dodge the rate limit
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # The web search can take up to a minute
+        proxy_read_timeout 90s;
+    }
+}
