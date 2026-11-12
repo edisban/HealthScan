@@ -127,7 +127,7 @@ public class ProductService {
 
     private record SearchRequest(String barcode) {}
 
-    private JsonNode callAi(String path, @NonNull BodyInserter<?, ? super ClientHttpRequest> body) {
+    private JsonNode callAi(@NonNull String path, @NonNull BodyInserter<?, ? super ClientHttpRequest> body) {
         try {
             return webClient.post().uri(path).body(body)
                     .retrieve().bodyToMono(JsonNode.class).block(AiClientConfig.TIMEOUT);

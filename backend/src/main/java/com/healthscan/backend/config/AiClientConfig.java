@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
+import java.util.Objects;
 
 /** The one HTTP client for the AI service: its base URL and the shared secret it expects. */
 @Configuration
@@ -20,6 +21,8 @@ public class AiClientConfig {
     }
 
     static WebClient build(WebClient.Builder builder, String url, String secret) {
+        // Always set: healthscan.ai-service-url has a default
+        Objects.requireNonNull(url, "healthscan.ai-service-url");
         builder.baseUrl(url);
         if (secret != null && !secret.isBlank()) {
             builder.defaultHeader(SECRET_HEADER, secret);
