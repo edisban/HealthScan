@@ -80,4 +80,5 @@ The rate-limit test uses up the per-IP budget for a minute; wait a minute before
   - `npm run typecheck` (mobile)
 - Work in phases. Each phase ends with exactly one commit, made only after the four checks pass.
 - Do not add Claude attribution to commits or pull requests: no `Co-Authored-By: Claude` trailer and no "Generated with Claude Code" line.
+- Schema changes go in a new Flyway file (`backend/src/main/resources/db/migration/V<n>__<what>.sql`); never edit an applied migration. Hibernate only validates.
 - `main` is the only long-lived branch. CI (`.github/workflows/ci.yml`) runs on pushes to `main` and on pull requests.

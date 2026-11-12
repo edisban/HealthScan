@@ -110,9 +110,10 @@ The phone talks only to the backend. The backend owns the database and the produ
 | Component | Stack | Responsibility |
 |-----------|-------|----------------|
 | **Mobile app** (`mobile/`) | React Native 0.88, Expo SDK 58, TypeScript | Barcode scanner, photo capture, results UI, language and theme |
-| **Backend** (`backend/`) | Java 17, Spring Boot 3.3, Spring Data JPA, WebClient | REST API, product lookup chain, caching, orchestration of AI calls |
+| **Backend** (`backend/`) | Java 17, Spring Boot 3.3, Spring Data JPA, Flyway, WebClient | REST API, product lookup chain, caching, orchestration of AI calls |
 | **AI service** (`ai-service/`) | Python 3.11, FastAPI, OpenAI SDK → Groq | Health scoring, label reading, web search, fruit quality |
-| **Database** | PostgreSQL 16 | Cache of analyzed products |
+| **Database** | PostgreSQL 16, schema managed by Flyway | Cache of analyzed products |
+| **HTTPS proxy** (`caddy/`, optional) | Caddy 2 | TLS with automatic certificates, HTTP to HTTPS redirect, security headers |
 
 **Models**
 
@@ -214,7 +215,7 @@ Caching rules:
 - Label photo and web search products are in no database, so a request in the other language re-analyzes them from the cached row.
 - Concurrent scans of the same new barcode are safe: a duplicate insert is ignored and every request gets the analysis.
 - Rows saved before scores were calculated (no `score_source`) are analyzed once more.
-- The schema is managed by Hibernate (`ddl-auto=update`).
+- The schema is managed by [Flyway](https://flywaydb.org) migrations in `backend/src/main/resources/db/migration`; Hibernate only validates that the entities match it. A database created before Flyway (by Hibernate's old `ddl-auto=update`) is baselined and upgraded automatically on the next start, with its rows kept.
 
 ### Mobile app structure
 
@@ -295,6 +296,25 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 
 To run it in a browser instead, set `CORS_ALLOWED_ORIGINS=http://localhost:8081` in `.env`, restart the stack, and run `cd mobile && npm run web`.
 
+### 4. Production with HTTPS (optional)
+
+For a server that other people use, put the backend behind the Caddy proxy. Point a domain at the server, open ports 80 and 443, and add to `.env`:
+
+```bash
+DOMAIN=api.example.com              # Caddy gets and renews a Let's Encrypt certificate for it
+BACKEND_BIND=127.0.0.1              # the plain-HTTP backend is no longer reachable from outside
+FORWARD_HEADERS_STRATEGY=native     # the backend reads each client's address from the proxy
+```
+
+Then start everything with the proxy and point the app at the domain:
+
+```bash
+docker compose --profile https up -d --build
+# mobile/.env: EXPO_PUBLIC_API_BASE=https://api.example.com
+```
+
+Plain HTTP requests are redirected to HTTPS. Without the `https` profile nothing changes, so local development over the LAN keeps working with plain HTTP. With `DOMAIN` left empty, Caddy serves `localhost` with a locally generated certificate that phones do not trust, which is only useful for testing.
+
 ## Configuration
 
 | Variable | File | Required | Description |
@@ -307,6 +327,10 @@ To run it in a browser instead, set `CORS_ALLOWED_ORIGINS=http://localhost:8081`
 | `BACKEND_PORT` | `.env` | No | Host port for the backend; defaults to `8080` |
 | `MOCK_AI` | `.env` | No | `1` makes the AI service answer with canned data, with no Groq key or network (demos, end-to-end tests) |
 | `CORS_ALLOWED_ORIGINS` | `.env` | No | Comma-separated origins allowed to call the API from a browser, for the web version. Empty turns CORS off |
+| `DOMAIN` | `.env` | With `--profile https` | Public domain for the HTTPS proxy; empty means `localhost` |
+| `BACKEND_BIND` | `.env` | No | Address the backend port is published on; `127.0.0.1` behind the HTTPS proxy, `0.0.0.0` (default) for LAN development |
+| `FORWARD_HEADERS_STRATEGY` | `.env` | No | `native` behind the HTTPS proxy, so rate limits see each client; `none` (default) otherwise |
+| `HTTP_PORT`, `HTTPS_PORT` | `.env` | No | Host ports of the HTTPS proxy; default `80` and `443` |
 | `EXPO_PUBLIC_API_BASE` | `mobile/.env` | Yes | Backend URL reachable from the phone, e.g. `http://192.168.1.10:8080` |
 | `EXPO_PUBLIC_API_KEY` | `mobile/.env` | No | Must match `API_KEY`; the app sends it in `X-Api-Key` |
 
@@ -321,7 +345,10 @@ The backend is the only public entry point, so it carries the protections:
 | Rate limiting | Per client IP with Bucket4j: 10 requests a minute for the endpoints that call Groq (`/web-search`, `/label`, `/analyze-image*`) and 60 a minute for `GET /product`. Over the limit is `429` with a `Retry-After` header |
 | API key | Optional `X-Api-Key` header, checked only when `API_KEY` is set; a missing or wrong key is `401` |
 | Internal network | PostgreSQL and the AI service publish no ports, and the AI service rejects any request without the shared `X-Internal-Secret` (`401`), except `/health` |
+| HTTPS | Optional Caddy proxy (`--profile https`): automatic certificates, HTTP to HTTPS redirect, HSTS, `nosniff`, `no-referrer`, no `Server` header, 9 MB body cap |
 | Containers | The backend and the AI service run as an unprivileged user, not root |
+| Database schema | Versioned Flyway migrations; Hibernate cannot change the schema (`ddl-auto=validate`) |
+| Shared data | A label photo only fills in an unknown barcode; it cannot replace a product other users see |
 | Errors | RFC 9457 problem JSON with a short message; no stack traces leave the server |
 | AI replies | Validated with Pydantic before use; an unusable reply is `502`, and every Groq call has a timeout |
 | CORS | Off unless `CORS_ALLOWED_ORIGINS` lists the web app's origin |
@@ -329,7 +356,7 @@ The backend is the only public entry point, so it carries the protections:
 
 > **The API key is an abuse deterrent, not real authentication.** It is built into the app bundle, so anyone with the app can extract it. It stops casual scripts from spending your Groq quota; it does not identify users. Real authentication would need per-user accounts and tokens.
 
-Rate limits are per IP address as the backend sees it. Behind a reverse proxy every client would share the proxy's address, so the limiter would need the forwarded client address instead.
+Rate limits are per client IP address. Behind the HTTPS proxy, `FORWARD_HEADERS_STRATEGY=native` makes the backend take the address from `X-Forwarded-For`, which Caddy always sets itself, so a client cannot fake its address to dodge the limit. Without the proxy, keep the setting off, or anyone who can reach the backend directly could send that header.
 
 **Scanning in CI.** Every push and pull request runs [Gitleaks](https://github.com/gitleaks/gitleaks) for committed secrets, [CodeQL](https://codeql.github.com) for Java, Python and TypeScript, and [Trivy](https://trivy.dev) on both Docker images. Dependabot opens weekly update pull requests. Trivy reports but does not fail the build: some of the vulnerabilities it finds in the backend's dependencies are fixed only in Spring Framework 7, which needs the Spring Boot 4 migration on the roadmap.
 
@@ -391,6 +418,7 @@ The backend's own docs are at `http://localhost:8080/swagger-ui.html` when it ru
 .
 ├── docker-compose.yml
 ├── .env.example
+├── caddy/Caddyfile            # optional HTTPS proxy
 ├── ai-service/                # FastAPI + Groq
 │   ├── main.py
 │   ├── mock_ai.py             # canned answers for MOCK_AI=1
@@ -407,7 +435,8 @@ The backend's own docs are at `http://localhost:8080/swagger-ui.html` when it ru
 │       ├── web/               # rate limit, API key, upload limit, error handling
 │       ├── entity/            # JPA entity
 │       ├── repository/        # Spring Data repository
-│       └── dto/               # request/response models
+│       ├── dto/               # request/response models
+│       └── (resources) db/migration/  # Flyway migrations
 ├── e2e/                       # Playwright API and web tests
 ├── docs/screenshots/          # produced by the end-to-end tests
 └── mobile/                    # Expo app
@@ -427,9 +456,9 @@ The backend's own docs are at `http://localhost:8080/swagger-ui.html` when it ru
 
 | Suite | Tests | Tools | What it covers |
 |-------|-------|-------|----------------|
-| Backend | 116 | JUnit 5, Mockito, MockMvc, Testcontainers | Cache rules, lookup chain, score formula, validation, rate limits, API key, CORS, real PostgreSQL |
+| Backend | 119 | JUnit 5, Mockito, MockMvc, Testcontainers | Cache rules, lookup chain, score formula, validation, rate limits, API key, CORS, real PostgreSQL, Flyway upgrades |
 | AI service | 46 | pytest, a fake Groq client | Reply validation, prompts, image sizes, shared secret, mock mode |
-| Mobile | 29 | Jest, React Native Testing Library | Product, fruit and history hooks, the API client |
+| Mobile | 36 | Jest, React Native Testing Library | Product, fruit and history hooks, the API client, the product result screen |
 | End-to-end | 20 | Playwright | The API (including `400`, `401`, `413`, `429`) and the web app, against the real stack |
 
 No unit test needs an API key or a network connection: the product databases, the AI service and Groq are stubbed. `mvn verify` also runs the Testcontainers tests (skipped without Docker) and fails if line coverage drops below 80% (currently 88%).
@@ -473,6 +502,9 @@ flowchart LR
 | Product not found | The web search runs first; if it fails, use the label photo. Small or regional brands are often missing from public databases |
 | Expo Go asks to sign in to Expo CLI | Run `npx expo login` (or set `EXPO_TOKEN`) with the same account as the phone |
 | Containers not running | `docker compose ps` and `docker compose logs backend` |
+| Backend stops at start with a schema validation error | The database does not match the entities. Check `docker compose logs backend` for the Flyway step; a new column needs a new migration file, not a change to an old one |
+| HTTPS certificate not issued | `DOMAIN` must point at the server and ports 80 and 443 must be open; see `docker compose --profile https logs proxy` |
+| "The score is not available right now" | The AI service could not analyze the product; check `GROQ_API_KEY` and `docker compose logs ai-service`, then scan again |
 | `docker compose` says a variable must be set | Fill in `POSTGRES_PASSWORD` and `AI_SHARED_SECRET` in `.env` |
 | Backend cannot log in to PostgreSQL | An existing `pgdata` volume keeps the password it was created with. Set `POSTGRES_PASSWORD` to that value, or recreate the volume with `docker compose down -v` (this deletes the cached products) |
 | `401` from the backend | `EXPO_PUBLIC_API_KEY` in `mobile/.env` must match `API_KEY` in `.env`; restart `npm start` after changing it |
