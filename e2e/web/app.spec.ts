@@ -46,14 +46,15 @@ test("scanning a product shows its score, where it comes from and the disclaimer
   await scan(page, NUTELLA);
 
   await expect(page.getByText(/nutella/i).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/Calculated from Nutri-Score/)).toBeVisible();
+  await expect(page.getByText(/official nutrition data/)).toBeVisible();
+  await expect(page.getByText(/Nutri-Score [A-E]/)).toBeVisible();
   await expect(page.getByText(/not medical advice/)).toBeVisible();
   await snap(page, "product");
 });
 
 test("scanned products appear in the recent scans", async ({ page }) => {
   await scan(page, NUTELLA);
-  await expect(page.getByText(/Calculated from Nutri-Score/)).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/official nutrition data/)).toBeVisible({ timeout: 30_000 });
 
   await page.getByTestId("home").click();
 

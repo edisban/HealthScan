@@ -107,7 +107,8 @@ export const styles = StyleSheet.create({
   productName: { fontSize: 19, fontWeight: "800", letterSpacing: -0.3, marginBottom: 8 },
   chipRow: { flexDirection: "row", flexWrap: "wrap" },
   divider: { height: 1, marginVertical: 16 },
-  scoreBasis: { textAlign: "center", fontSize: 12, fontWeight: "600", marginTop: 10 },
+  factRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", marginTop: 12 },
+  scoreBasis: { textAlign: "center", fontSize: 12, fontWeight: "600", marginTop: 10, paddingHorizontal: 12 },
   disclaimer: { textAlign: "center", fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 16, paddingHorizontal: 8 },
 
   cardTitleRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
