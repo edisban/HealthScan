@@ -12,6 +12,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Base64;
@@ -22,6 +23,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -203,6 +205,51 @@ class ProductControllerTest {
                 .andExpect(status().isPayloadTooLarge());
 
         verifyNoInteractions(imageAnalysisService);
+    }
+
+    @Test
+    void multipartUploadIsAnalyzed() throws Exception {
+        when(imageAnalysisService.analyzeImage(eq(IMAGE), any()))
+                .thenReturn(new ImageAnalysisResponse(true, "kiwi", "good", 90, "Fresh"));
+
+        mvc.perform(multipart("/api/v1/analyze-image").file(new MockMultipartFile("file", "kiwi.jpg", "image/jpeg", IMAGE)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fruitName").value("kiwi"));
+    }
+
+    @Test
+    void emptyMultipartFileIsABadRequest() throws Exception {
+        mvc.perform(multipart("/api/v1/analyze-image").file(new MockMultipartFile("file", "empty.jpg", "image/jpeg", new byte[0])))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("No image provided"));
+
+        verifyNoInteractions(imageAnalysisService);
+    }
+
+    @Test
+    void missingMultipartFileIsABadRequest() throws Exception {
+        mvc.perform(multipart("/api/v1/analyze-image"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void oversizedMultipartFileIsRejectedWith413() throws Exception {
+        mvc.perform(multipart("/api/v1/analyze-image").file(new MockMultipartFile("file", "big.jpg", "image/jpeg", new byte[2048])))
+                .andExpect(status().isPayloadTooLarge());
+
+        verifyNoInteractions(imageAnalysisService);
+    }
+
+    @Test
+    void aiOutageOnAFruitCheckIsABadGateway() throws Exception {
+        when(imageAnalysisService.analyzeImage(any(), any()))
+                .thenThrow(new com.healthscan.backend.web.AiUnavailableException("The AI service is not available right now", null));
+
+        mvc.perform(post("/api/v1/analyze-image-base64")
+                        .contentType(MediaType.APPLICATION_JSON).content(imageJson(IMAGE_BASE64)))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.status").value(502))
+                .andExpect(jsonPath("$.detail").value("The AI service is not available right now"));
     }
 
     @Test

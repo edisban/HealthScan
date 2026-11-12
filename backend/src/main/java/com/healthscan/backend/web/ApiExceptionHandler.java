@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import java.util.stream.Collectors;
 
-/** Maps invalid input to 400 and oversized uploads to 413, instead of a generic 500. */
+/** Maps invalid input to 400, oversized uploads to 413 and an unavailable AI service to 502, instead of a generic 500. */
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
@@ -37,6 +37,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidImageException.class)
     public ResponseEntity<ProblemDetail> invalidImage(InvalidImageException e) {
         return problem(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    @ExceptionHandler(AiUnavailableException.class)
+    public ResponseEntity<ProblemDetail> aiUnavailable(AiUnavailableException e) {
+        return problem(HttpStatus.BAD_GATEWAY, e.getMessage());
     }
 
     @ExceptionHandler({ImageTooLargeException.class, MaxUploadSizeExceededException.class})
