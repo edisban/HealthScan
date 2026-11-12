@@ -1,7 +1,7 @@
 import { test, expect, Page } from "@playwright/test";
 
 // The exported web app against the running stack (MOCK_AI=1). UPDATE_SCREENSHOTS=1 also saves
-// the README screenshots to docs/screenshots.
+// screenshots of each screen to docs/screenshots.
 const NUTELLA = "3017620422003";
 const UNKNOWN = "2900000017283";
 

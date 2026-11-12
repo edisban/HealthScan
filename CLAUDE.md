@@ -66,7 +66,7 @@ export MOCK_AI=1 POSTGRES_PASSWORD=e2e AI_SHARED_SECRET=e2e API_KEY=e2e-key CORS
 docker compose up -d --build --wait
 (cd mobile && EXPO_PUBLIC_API_BASE=http://localhost:8080 EXPO_PUBLIC_API_KEY=e2e-key npm run build:web)
 cd e2e && npm ci && npx playwright install chromium && npx playwright test
-npm run screenshots           # also refreshes docs/screenshots for the README
+npm run screenshots           # also saves screenshots of the web app to docs/screenshots
 ```
 
 The rate-limit test uses up the per-IP budget for a minute; wait a minute before running the suite again.
