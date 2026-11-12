@@ -6,7 +6,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
+import com.healthscan.backend.config.HealthscanProperties;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
@@ -47,10 +47,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 }
             });
 
-    public RateLimitFilter(@Value("${healthscan.rate-limit.strict-per-minute:10}") int strictPerMinute,
-                           @Value("${healthscan.rate-limit.relaxed-per-minute:60}") int relaxedPerMinute) {
-        this.strictPerMinute = strictPerMinute;
-        this.relaxedPerMinute = relaxedPerMinute;
+    public RateLimitFilter(HealthscanProperties properties) {
+        this.strictPerMinute = properties.rateLimit().strictPerMinute();
+        this.relaxedPerMinute = properties.rateLimit().relaxedPerMinute();
     }
 
     static Tier tierOf(String method, String path) {

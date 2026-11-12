@@ -2,6 +2,7 @@ package com.healthscan.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.healthscan.backend.config.AiClientConfig;
 import com.healthscan.backend.dto.AiAnalyzeRequest;
 import com.healthscan.backend.dto.AiAnalyzeResponse;
 import com.healthscan.backend.dto.ProductResponse;
@@ -10,6 +11,8 @@ import com.healthscan.backend.entity.WebSearchMiss;
 import com.healthscan.backend.repository.ProductRepository;
 import com.healthscan.backend.repository.WebSearchMissRepository;
 import com.healthscan.backend.service.ProductLookupService.ProductInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.client.reactive.ClientHttpRequest;
@@ -32,7 +35,7 @@ public class ProductService {
 
     // How long a failed web search is remembered before the barcode may be searched again
     private static final Duration WEB_SEARCH_RETRY_AFTER = Duration.ofDays(1);
-    private static final Duration AI_CALL_TIMEOUT = Duration.ofSeconds(60);
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
     private final ProductRepository repo;
     private final WebSearchMissRepository missRepo;
@@ -103,6 +106,7 @@ public class ProductService {
             missRepo.save(new WebSearchMiss(barcode, Instant.now()));
         } catch (DataIntegrityViolationException duplicate) {
             // A concurrent search recorded the same miss first
+            log.debug("Web search miss for {} was already recorded", barcode);
         }
     }
 
@@ -123,8 +127,9 @@ public class ProductService {
     private JsonNode callAi(String path, @NonNull BodyInserter<?, ? super ClientHttpRequest> body) {
         try {
             return webClient.post().uri(path).body(body)
-                    .retrieve().bodyToMono(JsonNode.class).block(AI_CALL_TIMEOUT);
+                    .retrieve().bodyToMono(JsonNode.class).block(AiClientConfig.TIMEOUT);
         } catch (Exception e) {
+            log.warn("AI service call {} failed: {}", path, e.toString());
             return null;
         }
     }
@@ -148,8 +153,10 @@ public class ProductService {
         analyzeWithAi(product, aiName, lang);
         try {
             repo.save(product);
-        } catch (DataIntegrityViolationException duplicate) {
-            // A concurrent request for the same barcode saved it first; our analysis is still valid
+        } catch (DataIntegrityViolationException e) {
+            // Usually a concurrent request saved the same barcode first, and our analysis is still valid.
+            // It can also be a value over a column limit, so log it rather than hide it.
+            log.warn("Could not save product {}: {}", barcode, e.getMostSpecificCause().getMessage());
         }
         return toResponse(product);
     }
@@ -165,7 +172,7 @@ public class ProductService {
                     .bodyValue(aiReq)
                     .retrieve()
                     .bodyToMono(AiAnalyzeResponse.class)
-                    .block();
+                    .block(AiClientConfig.TIMEOUT);
             if (aiRes != null) {
                 product.setHealthScore(aiRes.getHealthScore());
                 product.setExplanation(aiRes.getSummary());
@@ -176,8 +183,9 @@ public class ProductService {
                 product.setProsJson(mapper.writeValueAsString(aiRes.getPros()));
                 product.setConsJson(mapper.writeValueAsString(aiRes.getCons()));
             }
-        } catch (Exception ignored) {
-            // AI service unavailable; keep defaults
+        } catch (Exception e) {
+            // AI service unavailable; the product is saved without a score and re-analyzed on the next scan
+            log.warn("Scoring failed for {}: {}", product.getBarcode(), e.toString());
         }
     }
 
@@ -200,6 +208,7 @@ public class ProductService {
         try {
             return Arrays.asList(mapper.readValue(json, String[].class));
         } catch (Exception e) {
+            log.warn("Stored list is not a JSON array: {}", e.toString());
             return null;
         }
     }

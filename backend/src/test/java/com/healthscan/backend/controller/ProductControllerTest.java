@@ -221,4 +221,12 @@ class ProductControllerTest {
 
         mvc.perform(get("/api/v1/product/" + BARCODE)).andExpect(status().isOk());
     }
+
+    @Test
+    void frameworkErrorsAreProblemResponsesToo() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/api/v1/product/" + BARCODE))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.status").value(405))
+                .andExpect(jsonPath("$.title").value("Method Not Allowed"));
+    }
 }

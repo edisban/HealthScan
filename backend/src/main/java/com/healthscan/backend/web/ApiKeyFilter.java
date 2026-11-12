@@ -4,7 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
+import com.healthscan.backend.config.HealthscanProperties;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
@@ -27,7 +27,8 @@ public class ApiKeyFilter extends OncePerRequestFilter {
 
     private final byte[] expectedKey;
 
-    public ApiKeyFilter(@Value("${healthscan.api-key:}") String apiKey) {
+    public ApiKeyFilter(HealthscanProperties properties) {
+        String apiKey = properties.apiKey();
         this.expectedKey = apiKey == null ? new byte[0] : apiKey.getBytes(StandardCharsets.UTF_8);
     }
 

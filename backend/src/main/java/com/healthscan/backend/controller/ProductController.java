@@ -1,5 +1,6 @@
 package com.healthscan.backend.controller;
 
+import com.healthscan.backend.config.HealthscanProperties;
 import com.healthscan.backend.dto.ImageAnalysisBase64Request;
 import com.healthscan.backend.dto.ImageAnalysisResponse;
 import com.healthscan.backend.dto.ProductResponse;
@@ -7,10 +8,8 @@ import com.healthscan.backend.service.ImageAnalysisService;
 import com.healthscan.backend.service.ProductService;
 import com.healthscan.backend.web.Base64Image;
 import jakarta.validation.constraints.Pattern;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.unit.DataSize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -30,10 +29,10 @@ public class ProductController {
     private final long maxImageBytes;
 
     public ProductController(ProductService productService, ImageAnalysisService imageAnalysisService,
-                             @Value("${healthscan.max-image-size:8MB}") DataSize maxImageSize) {
+                             HealthscanProperties properties) {
         this.productService = productService;
         this.imageAnalysisService = imageAnalysisService;
-        this.maxImageBytes = maxImageSize.toBytes();
+        this.maxImageBytes = properties.maxImageSize().toBytes();
     }
 
     @GetMapping("/product/{barcode}")

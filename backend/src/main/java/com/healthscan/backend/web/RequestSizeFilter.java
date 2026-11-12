@@ -4,12 +4,11 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.beans.factory.annotation.Value;
+import com.healthscan.backend.config.HealthscanProperties;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
-import org.springframework.util.unit.DataSize;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -24,8 +23,8 @@ public class RequestSizeFilter extends OncePerRequestFilter {
 
     private final long maxBytes;
 
-    public RequestSizeFilter(@Value("${healthscan.max-image-size:8MB}") DataSize maxImageSize) {
-        this.maxBytes = maxImageSize.toBytes();
+    public RequestSizeFilter(HealthscanProperties properties) {
+        this.maxBytes = properties.maxImageSize().toBytes();
     }
 
     @Override

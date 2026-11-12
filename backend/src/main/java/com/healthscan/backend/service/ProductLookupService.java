@@ -2,6 +2,8 @@ package com.healthscan.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ public class ProductLookupService {
             "product_name", "product_name_el", "product_name_en", "generic_name", "brands",
             "image_url", "image_front_url", "ingredients_text", "ingredients_text_el", "ingredients_text_en");
     private static final Duration TIMEOUT = Duration.ofSeconds(8);
+    private static final Logger log = LoggerFactory.getLogger(ProductLookupService.class);
 
     private final WebClient webClient;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -56,8 +59,9 @@ public class ProductLookupService {
             try {
                 ProductInfo info = source.get();
                 if (info != null) return info;
-            } catch (Exception ignored) {
+            } catch (Exception e) {
                 // Not found (404), rate limited or unreachable: try the next database
+                log.debug("Lookup source failed for {}: {}", barcode, e.toString());
             }
         }
         return null;
