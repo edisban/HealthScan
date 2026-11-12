@@ -65,9 +65,29 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  # HTTPS reverse proxy; only started with: docker compose --profile https up -d
+  # HTTPS: nginx in front of the backend, certbot for the certificates.
+  # Only started with: docker compose --profile https up -d
+  certbot:
+    image: certbot/certbot:v5.8.0
+    profiles: [https]
+    entrypoint: ["/bin/sh", "/certbot.sh"]
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - LETSENCRYPT_EMAIL=${LETSENCRYPT_EMAIL:-}
+    volumes:
+      - ./nginx/certbot.sh:/certbot.sh:ro
+      - certs:/etc/letsencrypt
+      - acme:/var/www/certbot
+    healthcheck:
+      # Ready once a certificate (at first the temporary one) is in place for nginx
+      test: ["CMD", "test", "-f", "/etc/letsencrypt/active/fullchain.pem"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   proxy:
-    image: caddy:2.11.4
+    build: ./nginx
     profiles: [https]
     ports:
       - "${HTTP_PORT:-80}:80"
@@ -75,16 +95,18 @@ services:
     environment:
       - DOMAIN=${DOMAIN:-localhost}
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      # Certificates and keys, kept across restarts
-      - caddy_data:/data
-      - caddy_config:/config
+      - certs:/etc/letsencrypt:ro
+      - acme:/var/www/certbot:ro
     depends_on:
       backend:
+        condition: service_healthy
+      certbot:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
   pgdata:
-  caddy_data:
-  caddy_config:
+  # Let's Encrypt account, certificates and the copy nginx reads
+  certs:
+  # Files for Let's Encrypt's domain check, served by nginx
+  acme:
