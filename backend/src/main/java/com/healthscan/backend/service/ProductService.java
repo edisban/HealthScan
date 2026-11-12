@@ -2,6 +2,7 @@ package com.healthscan.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.healthscan.backend.config.AiClientConfig;
 import com.healthscan.backend.dto.AiAnalyzeRequest;
 import com.healthscan.backend.dto.AiAnalyzeResponse;
 import com.healthscan.backend.dto.ProductResponse;
@@ -10,7 +11,8 @@ import com.healthscan.backend.entity.WebSearchMiss;
 import com.healthscan.backend.repository.ProductRepository;
 import com.healthscan.backend.repository.WebSearchMissRepository;
 import com.healthscan.backend.service.ProductLookupService.ProductInfo;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.client.reactive.ClientHttpRequest;
@@ -33,7 +35,7 @@ public class ProductService {
 
     // How long a failed web search is remembered before the barcode may be searched again
     private static final Duration WEB_SEARCH_RETRY_AFTER = Duration.ofDays(1);
-    private static final Duration AI_CALL_TIMEOUT = Duration.ofSeconds(60);
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
     private final ProductRepository repo;
     private final WebSearchMissRepository missRepo;
@@ -41,30 +43,29 @@ public class ProductService {
     private final WebClient webClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    @Autowired
-    public ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService) {
-        this(repo, missRepo, lookupService, WebClient.builder().build());
-    }
-
-    // Lets tests replace the AI service with a stub
-    ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService, WebClient webClient) {
+    /** @param aiWebClient the client from {@code AiClientConfig}: AI service base URL plus its shared secret */
+    public ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService,
+                          WebClient aiWebClient) {
         this.repo = repo;
         this.missRepo = missRepo;
         this.lookupService = lookupService;
-        this.webClient = webClient;
+        this.webClient = aiWebClient;
     }
 
     public ProductResponse analyzeProduct(String barcode, String lang) {
         Product cached = repo.findByBarcode(barcode).orElse(null);
-        // Re-analyze products cached without a score (e.g. AI service was down last time) or in another language
-        if (cached != null && cached.getHealthScore() != null && lang.equals(cached.getLang())) {
+        // Re-analyze products cached without a score (e.g. AI service was down last time), in another language,
+        // or saved before scores were calculated from Nutri-Score (no scoreSource yet)
+        if (cached != null && cached.getHealthScore() != null && cached.getScoreSource() != null
+                && lang.equals(cached.getLang())) {
             return toResponse(cached);
         }
 
         ProductInfo info = lookupService.lookup(barcode);
         // Label photo and web search products are in no database; re-analyze them from the cached row
         if (info == null && cached != null) {
-            info = new ProductInfo(cached.getName(), "", cached.getImageUrl(), cached.getIngredientsText(), cached.getSource());
+            info = new ProductInfo(cached.getName(), "", cached.getImageUrl(), cached.getIngredientsText(), cached.getSource(),
+                    cached.getNutriScore(), cached.getNovaGroup(), cached.getAdditivesCount());
         }
         // Not in any database; don't cache, so a later scan, label photo or web search can still fill it in
         return info == null ? notFound(barcode) : saveAndAnalyze(cached, barcode, info, lang);
@@ -72,6 +73,8 @@ public class ProductService {
 
     /** Identifies an unknown product from a photo of its label, then scores it like any other product. */
     public ProductResponse analyzeLabel(String barcode, byte[] imageBytes, String lang) {
+        // A label photo only fills in unknown barcodes; it never replaces a product everyone else sees
+        if (repo.findByBarcode(barcode).isPresent()) return analyzeProduct(barcode, lang);
         byte[] bytes = imageBytes != null ? imageBytes : new byte[0];
         ByteArrayResource image = new ByteArrayResource(bytes) {
             @Override
@@ -108,6 +111,7 @@ public class ProductService {
             missRepo.save(new WebSearchMiss(barcode, Instant.now()));
         } catch (DataIntegrityViolationException duplicate) {
             // A concurrent search recorded the same miss first
+            log.debug("Web search miss for {} was already recorded", barcode);
         }
     }
 
@@ -125,18 +129,14 @@ public class ProductService {
 
     private record SearchRequest(String barcode) {}
 
-    private JsonNode callAi(String path, @NonNull BodyInserter<?, ? super ClientHttpRequest> body) {
+    private JsonNode callAi(@NonNull String path, @NonNull BodyInserter<?, ? super ClientHttpRequest> body) {
         try {
-            return webClient.post().uri(aiBaseUrl() + path).body(body)
-                    .retrieve().bodyToMono(JsonNode.class).block(AI_CALL_TIMEOUT);
+            return webClient.post().uri(path).body(body)
+                    .retrieve().bodyToMono(JsonNode.class).block(AiClientConfig.TIMEOUT);
         } catch (Exception e) {
+            log.warn("AI service call {} failed: {}", path, e.toString());
             return null;
         }
-    }
-
-    private static String aiBaseUrl() {
-        String envUrl = System.getenv("AI_SERVICE_URL");
-        return (envUrl == null || envUrl.isBlank()) ? "http://localhost:8000" : envUrl;
     }
 
     private static ProductResponse notFound(String barcode) {
@@ -152,30 +152,45 @@ public class ProductService {
         product.setImageUrl(info.imageUrl());
         product.setIngredientsText(info.ingredients());
         product.setSource(info.source());
+        product.setNutriScore(info.nutriScore());
+        product.setNovaGroup(info.novaGroup());
+        product.setAdditivesCount(info.additives());
         String aiName = info.brand().isEmpty() || info.name().toLowerCase().contains(info.brand().toLowerCase())
                 ? info.name()
                 : info.brand() + " " + info.name();
-        analyzeWithAi(product, aiName, lang);
+        Integer fixedScore = HealthScore.fromOpenFoodFacts(info.nutriScore(), info.novaGroup(), info.additives());
+        analyzeWithAi(product, aiName, lang, fixedScore);
+        if (fixedScore != null) {
+            // The calculated score always wins, even if the AI returned another number or was down
+            product.setHealthScore(fixedScore);
+            product.setScoreSource(HealthScore.NUTRI_SCORE);
+        } else {
+            product.setScoreSource(product.getHealthScore() != null ? HealthScore.AI_ESTIMATE : null);
+        }
         try {
             repo.save(product);
-        } catch (DataIntegrityViolationException duplicate) {
-            // A concurrent request for the same barcode saved it first; our analysis is still valid
+        } catch (DataIntegrityViolationException e) {
+            // Usually a concurrent request saved the same barcode first, and our analysis is still valid.
+            // It can also be a value over a column limit, so log it rather than hide it.
+            log.warn("Could not save product {}: {}", barcode, e.getMostSpecificCause().getMessage());
         }
         return toResponse(product);
     }
 
     /** Fills score, summary and details from the AI service; leaves them empty if it is unavailable. */
-    private void analyzeWithAi(Product product, String name, String lang) {
+    private void analyzeWithAi(Product product, String name, String lang, Integer fixedScore) {
         String ingredients = product.getIngredientsText() == null ? "" : product.getIngredientsText();
         List<String> ingredientList = ingredients.isEmpty() ? List.of() : Arrays.asList(ingredients.split(","));
         try {
             AiAnalyzeRequest aiReq = new AiAnalyzeRequest(product.getBarcode(), name, ingredientList, lang);
+            aiReq.setFixedScore(fixedScore);
+            aiReq.setFacts(HealthScore.describe(product.getNutriScore(), product.getNovaGroup(), product.getAdditivesCount()));
             AiAnalyzeResponse aiRes = webClient.post()
-                    .uri(aiBaseUrl() + "/analyze")
+                    .uri("/analyze")
                     .bodyValue(aiReq)
                     .retrieve()
                     .bodyToMono(AiAnalyzeResponse.class)
-                    .block();
+                    .block(AiClientConfig.TIMEOUT);
             if (aiRes != null) {
                 product.setHealthScore(aiRes.getHealthScore());
                 product.setExplanation(aiRes.getSummary());
@@ -186,8 +201,9 @@ public class ProductService {
                 product.setProsJson(mapper.writeValueAsString(aiRes.getPros()));
                 product.setConsJson(mapper.writeValueAsString(aiRes.getCons()));
             }
-        } catch (Exception ignored) {
-            // AI service unavailable; keep defaults
+        } catch (Exception e) {
+            // AI service unavailable; the product is saved without a score and re-analyzed on the next scan
+            log.warn("Scoring failed for {}: {}", product.getBarcode(), e.toString());
         }
     }
 
@@ -202,6 +218,9 @@ public class ProductService {
                 readList(product.getProsJson()),
                 readList(product.getConsJson()));
         res.setSource(product.getSource() != null ? product.getSource() : "");
+        res.setScoreSource(product.getScoreSource() != null ? product.getScoreSource() : "");
+        res.setNutriScore(product.getNutriScore() != null ? product.getNutriScore() : "");
+        res.setNovaGroup(product.getNovaGroup());
         return res;
     }
 
@@ -210,6 +229,7 @@ public class ProductService {
         try {
             return Arrays.asList(mapper.readValue(json, String[].class));
         } catch (Exception e) {
+            log.warn("Stored list is not a JSON array: {}", e.toString());
             return null;
         }
     }

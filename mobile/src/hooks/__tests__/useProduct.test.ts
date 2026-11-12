@@ -148,6 +148,38 @@ describe("fetchProduct", () => {
   });
 });
 
+describe("language switch", () => {
+  it("fetches the shown product again in the new language", async () => {
+    api.fetchByBarcode.mockResolvedValue(product);
+    const { result, rerender } = await renderHook(({ lang }: { lang: string }) => useProduct(lang), { initialProps: { lang: "en" } });
+    await act(() => result.current.fetchProduct(BARCODE));
+
+    await act(async () => rerender({ lang: "el" }));
+
+    await waitFor(() => expect(api.fetchByBarcode).toHaveBeenLastCalledWith(BARCODE, "el"));
+    expect(api.fetchByBarcode).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not refetch a product that was not found", async () => {
+    api.fetchByBarcode.mockResolvedValue(notFound);
+    api.searchWeb.mockResolvedValue(notFound);
+    const { result, rerender } = await renderHook(({ lang }: { lang: string }) => useProduct(lang), { initialProps: { lang: "en" } });
+    await act(() => result.current.fetchProduct(BARCODE));
+
+    await act(async () => rerender({ lang: "el" }));
+
+    expect(api.fetchByBarcode).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing on the home screen", async () => {
+    const { rerender } = await renderHook(({ lang }: { lang: string }) => useProduct(lang), { initialProps: { lang: "en" } });
+
+    await act(async () => rerender({ lang: "el" }));
+
+    expect(api.fetchByBarcode).not.toHaveBeenCalled();
+  });
+});
+
 describe("analyzeLabel", () => {
   it("sends the photo and shows the result", async () => {
     photo.mockResolvedValue({ uri: "file://a.jpg", dataUrl: "data:image/jpeg;base64,AAA" });

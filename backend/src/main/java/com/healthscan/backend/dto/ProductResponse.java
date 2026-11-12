@@ -16,12 +16,22 @@ public class ProductResponse {
     // false when no product database knows the barcode
     private boolean found = true;
     private String source = "";
+    // "Nutri-Score" (calculated) or "AI estimate"
+    private String scoreSource = "";
+    private String nutriScore = "";
+    private Integer novaGroup;
 
     public ProductResponse() {}
     public boolean isFound() { return found; }
     public void setFound(boolean found) { this.found = found; }
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+    public String getScoreSource() { return scoreSource; }
+    public void setScoreSource(String scoreSource) { this.scoreSource = scoreSource; }
+    public String getNutriScore() { return nutriScore; }
+    public void setNutriScore(String nutriScore) { this.nutriScore = nutriScore; }
+    public Integer getNovaGroup() { return novaGroup; }
+    public void setNovaGroup(Integer novaGroup) { this.novaGroup = novaGroup; }
     public ProductResponse(String barcode, String name, String imageUrl, String ingredientsText, Integer healthScore, String explanation) {
         this(barcode, name, imageUrl, ingredientsText, healthScore, explanation, name, "", null, "", null, null);
     }

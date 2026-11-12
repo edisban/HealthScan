@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { productApi } from "@/api/products";
 import { Product } from "@/api/types";
 import { getPhoto, Photo, PhotoSource } from "@/utils/photo";
@@ -86,6 +86,14 @@ export const useProduct = (lang: string): UseProductReturn => {
     },
     [lang, run]
   );
+
+  // A language switch while a product is shown fetches its analysis again in the new language
+  const shownLang = useRef(lang);
+  useEffect(() => {
+    if (shownLang.current === lang) return;
+    shownLang.current = lang;
+    if (result && result.found !== false && !loading) fetchProduct(result.barcode);
+  }, [lang]);
 
   const skipWebSearch = useCallback(() => webSearch.current?.abort(), []);
 

@@ -2,6 +2,8 @@ package com.healthscan.backend.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
@@ -17,13 +19,21 @@ import java.util.function.Supplier;
 @Service
 public class ProductLookupService {
 
-    public record ProductInfo(String name, String brand, String imageUrl, String ingredients, String source) {}
+    /** Nutri-Score grade (a to e, else empty), NOVA group and additive count come from Open Food Facts only. */
+    public record ProductInfo(String name, String brand, String imageUrl, String ingredients, String source,
+                              String nutriScore, Integer novaGroup, Integer additives) {
+        public ProductInfo(String name, String brand, String imageUrl, String ingredients, String source) {
+            this(name, brand, imageUrl, ingredients, source, "", null, null);
+        }
+    }
 
     // Only request the fields we use; full Open Facts records can be hundreds of KB
     private static final String OPEN_FACTS_FIELDS = String.join(",",
             "product_name", "product_name_el", "product_name_en", "generic_name", "brands",
-            "image_url", "image_front_url", "ingredients_text", "ingredients_text_el", "ingredients_text_en");
+            "image_url", "image_front_url", "ingredients_text", "ingredients_text_el", "ingredients_text_en",
+            "nutriscore_grade", "nova_group", "additives_n");
     private static final Duration TIMEOUT = Duration.ofSeconds(8);
+    private static final Logger log = LoggerFactory.getLogger(ProductLookupService.class);
 
     private final WebClient webClient;
     private final ObjectMapper mapper = new ObjectMapper();
@@ -56,8 +66,9 @@ public class ProductLookupService {
             try {
                 ProductInfo info = source.get();
                 if (info != null) return info;
-            } catch (Exception ignored) {
+            } catch (Exception e) {
                 // Not found (404), rate limited or unreachable: try the next database
+                log.debug("Lookup source failed for {}: {}", barcode, e.toString());
             }
         }
         return null;
@@ -74,7 +85,10 @@ public class ProductLookupService {
                 p.path("brands").asText("").split(",")[0].trim(),
                 firstNonBlank(p, "image_url", "image_front_url"),
                 firstNonBlank(p, "ingredients_text", "ingredients_text_el", "ingredients_text_en"),
-                sourceName);
+                sourceName,
+                HealthScore.isGrade(p.path("nutriscore_grade").asText("")) ? p.path("nutriscore_grade").asText().toLowerCase() : "",
+                intOrNull(p.path("nova_group")),
+                intOrNull(p.path("additives_n")));
     }
 
     // Free trial endpoint: no key, 100 lookups per day; has names but no ingredients
@@ -107,6 +121,10 @@ public class ProductLookupService {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+    }
+
+    private static Integer intOrNull(JsonNode node) {
+        return node.canConvertToInt() || node.isTextual() && node.asText().matches("\\d+") ? node.asInt() : null;
     }
 
     private static String firstNonBlank(JsonNode node, String... fields) {

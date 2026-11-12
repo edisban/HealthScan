@@ -8,6 +8,7 @@ interface InputProps {
   style?: StyleProp<TextStyle>;
   keyboardType?: "numeric" | "default";
   onSubmitEditing?: () => void;
+  testID?: string;
 }
 
 export const Input = ({
@@ -17,6 +18,7 @@ export const Input = ({
   style,
   keyboardType = "default",
   onSubmitEditing,
+  testID,
 }: InputProps) => {
   const { theme } = useTheme();
   return (
@@ -37,6 +39,7 @@ export const Input = ({
       keyboardType={keyboardType}
       returnKeyType="search"
       onSubmitEditing={onSubmitEditing}
+      testID={testID}
     />
   );
 };

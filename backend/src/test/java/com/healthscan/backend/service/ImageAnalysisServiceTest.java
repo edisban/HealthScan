@@ -17,7 +17,7 @@ class ImageAnalysisServiceTest {
     private static ImageAnalysisService serviceReplying(String json) {
         return new ImageAnalysisService(WebClient.builder().exchangeFunction(request ->
                 Mono.just(ClientResponse.create(HttpStatus.OK)
-                        .header("Content-Type", "application/json").body(json).build())));
+                        .header("Content-Type", "application/json").body(json).build())).build());
     }
 
     @Test
@@ -35,7 +35,7 @@ class ImageAnalysisServiceTest {
     @Test
     void aiServiceOutageIsReportedInTheSummary() {
         ImageAnalysisService service = new ImageAnalysisService(WebClient.builder()
-                .exchangeFunction(request -> Mono.error(new IllegalStateException("AI service down"))));
+                .exchangeFunction(request -> Mono.error(new IllegalStateException("AI service down"))).build());
 
         ImageAnalysisResponse response = service.analyzeImage(IMAGE, "photo.jpg");
 

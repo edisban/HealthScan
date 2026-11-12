@@ -1,6 +1,9 @@
 package com.healthscan.backend.service;
 
+import com.healthscan.backend.config.AiClientConfig;
 import com.healthscan.backend.dto.ImageAnalysisResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Service;
@@ -14,16 +17,13 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 @Service
 public class ImageAnalysisService {
 
+    private static final Logger log = LoggerFactory.getLogger(ImageAnalysisService.class);
+
     private final WebClient webClient;
 
-    public ImageAnalysisService(WebClient.Builder builder) {
-        String aiUrl = System.getenv("AI_SERVICE_URL");
-        if (aiUrl == null || aiUrl.isBlank()) {
-            aiUrl = "http://localhost:8000";
-        }
-        this.webClient = builder != null
-                ? builder.baseUrl(aiUrl).build()
-                : WebClient.builder().baseUrl(aiUrl).build();
+    /** @param aiWebClient the client from {@code AiClientConfig}: AI service base URL plus its shared secret */
+    public ImageAnalysisService(WebClient aiWebClient) {
+        this.webClient = aiWebClient;
     }
 
     public ImageAnalysisResponse analyzeImage(byte[] imageBytes, String filename) {
@@ -45,14 +45,16 @@ public class ImageAnalysisService {
                     .body(BodyInserters.fromMultipartData(buildMultipart(resource)))
                     .retrieve()
                     .bodyToMono(ImageAnalysisResponse.class)
-                    .block();
+                    .block(AiClientConfig.TIMEOUT);
 
             return res != null
                     ? res
                     : new ImageAnalysisResponse(false, "", "uncertain", 0.0, "No response from AI service.");
         } catch (WebClientResponseException | WebClientRequestException e) {
+            log.warn("Fruit analysis failed: {}", e.toString());
             return new ImageAnalysisResponse(false, "", "uncertain", 0.0, "AI service error: " + e.getMessage());
         } catch (Exception e) {
+            log.warn("Fruit analysis failed unexpectedly: {}", e.toString());
             return new ImageAnalysisResponse(false, "", "uncertain", 0.0, "Unexpected error: " + e.getMessage());
         }
     }

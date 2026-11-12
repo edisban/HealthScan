@@ -1,0 +1,26 @@
+# HTTPS in front of the backend (docker compose --profile https up).
+#
+# With a public DOMAIN, Caddy gets and renews a Let's Encrypt certificate by itself;
+# ports 80 and 443 must reach this machine. With DOMAIN=localhost (the default) it uses
+# a locally generated certificate that browsers and phones do not trust: for testing only.
+# Plain HTTP requests are redirected to HTTPS automatically.
+
+{$DOMAIN:localhost} {
+	encode zstd gzip
+
+	# Slightly above the backend's 8 MB image limit, which answers with a clear 413
+	request_body {
+		max_size 9MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Sets X-Forwarded-For to the real client address (any client-sent value is replaced),
+	# so the backend's per-IP rate limit sees each user separately
+	reverse_proxy backend:8080
+}

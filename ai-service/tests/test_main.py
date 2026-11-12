@@ -55,7 +55,114 @@ def sent_image_size(request):
 
 
 def test_health(api):
-    assert api.get("/health").json() == {"status": "ok"}
+    assert api.get("/health").json() == {"status": "ok", "mock": False}
+
+
+def test_groq_calls_have_a_timeout_and_one_retry():
+    assert main.client.timeout == main.GROQ_TIMEOUT_SECONDS
+    assert main.client.max_retries == 1
+
+
+# --- Model replies are validated before use ---
+
+def test_list_given_as_a_single_string_is_accepted(api, groq):
+    groq.reply = '{"healthScore": 50, "summary": "s", "pros": "High protein", "cons": null}'
+
+    body = api.post("/analyze", json={"barcode": "1"}).json()
+
+    assert body["pros"] == ["High protein"]
+    assert body["cons"] == []
+
+
+def test_score_out_of_range_is_clamped(api, groq):
+    groq.reply = '{"healthScore": 150, "summary": ""}'
+
+    assert api.post("/analyze", json={"barcode": "1"}).json()["healthScore"] == 100
+
+
+@pytest.mark.parametrize("reply", ['{"healthScore": "very healthy"}', "not json at all {", '["a", "list"]'])
+def test_unusable_reply_is_a_bad_gateway_not_a_crash(api, groq, reply):
+    groq.reply = reply
+
+    response = api.post("/analyze", json={"barcode": "1"})
+
+    assert response.status_code == 502
+
+
+def test_unknown_fruit_quality_becomes_uncertain(api, groq):
+    groq.reply = '{"isFruit": true, "fruitName": "kiwi", "quality": "excellent", "confidence": 140}'
+
+    body = api.post("/analyze-image", files=jpeg()).json()
+
+    assert body["quality"] == "uncertain"
+    assert body["confidence"] == 100.0
+
+
+def test_null_label_fields_are_empty_strings(api, groq):
+    groq.reply = '{"readable": true, "productName": "Yogurt", "brand": null, "ingredients": null}'
+
+    body = api.post("/read-label", files=jpeg()).json()
+
+    assert body == {"found": True, "productName": "Yogurt", "brand": "", "ingredients": ""}
+
+
+# --- MOCK_AI mode ---
+
+@pytest.fixture
+def mock_ai(monkeypatch):
+    from mock_ai import MockGroq
+    monkeypatch.setattr(main, "client", MockGroq())
+
+
+def test_mock_mode_scores_without_groq(api, mock_ai):
+    body = api.post("/analyze", json={"barcode": "1", "fixedScore": 39}).json()
+
+    assert body["healthScore"] == 39
+    assert body["summary"].startswith("Mock analysis")
+
+
+def test_mock_mode_answers_every_endpoint(api, mock_ai):
+    assert api.post("/analyze-image", files=jpeg()).json()["fruitName"] == "apple"
+    assert api.post("/read-label", files=jpeg()).json()["productName"] == "Mock label product"
+    assert api.post("/search-product", json={"barcode": "1"}).json()["found"] is False
+
+
+@pytest.fixture
+def shared_secret(monkeypatch):
+    monkeypatch.setattr(main, "AI_SHARED_SECRET", "s3cret")
+    return "s3cret"
+
+
+def test_missing_secret_is_unauthorized(api, groq, shared_secret):
+    response = api.post("/analyze", json={"barcode": "1"})
+
+    assert response.status_code == 401
+    assert groq.requests == []
+
+
+def test_wrong_secret_is_unauthorized(api, groq, shared_secret):
+    response = api.post("/analyze", json={"barcode": "1"}, headers={main.SECRET_HEADER: "s3cre7"})
+
+    assert response.status_code == 401
+    assert groq.requests == []
+
+
+def test_every_model_endpoint_needs_the_secret(api, groq, shared_secret):
+    assert api.post("/read-label", files=jpeg()).status_code == 401
+    assert api.post("/analyze-image", files=jpeg()).status_code == 401
+    assert api.post("/search-product", json={"barcode": "1"}).status_code == 401
+
+
+def test_correct_secret_is_accepted(api, groq, shared_secret):
+    groq.reply = '{"healthScore": 50, "summary": ""}'
+
+    response = api.post("/analyze", json={"barcode": "1"}, headers={main.SECRET_HEADER: shared_secret})
+
+    assert response.status_code == 200
+
+
+def test_health_stays_open_for_the_container_healthcheck(api, shared_secret):
+    assert api.get("/health").status_code == 200
 
 
 @pytest.mark.parametrize("endpoint", [main.read_label, main.analyze_image, main.search_product, main.analyze])
@@ -99,6 +206,34 @@ def test_analyze_accepts_an_ingredient_list(api, groq):
     api.post("/analyze", json={"barcode": "1", "ingredients": ["milk", "sugar"]})
 
     assert "Ingredients: milk, sugar" in groq.requests[0]["messages"][1]["content"]
+
+
+def test_fixed_score_is_kept_even_if_the_model_returns_another(api, groq):
+    groq.reply = '{"healthScore": 80, "summary": "Explained"}'
+
+    body = api.post("/analyze", json={"barcode": "1", "fixedScore": 39, "facts": "Nutri-Score C, NOVA group 4"}).json()
+
+    assert body["healthScore"] == 39
+    assert body["summary"] == "Explained"
+
+
+def test_fixed_score_and_facts_are_given_to_the_model(api, groq):
+    groq.reply = '{"healthScore": 39, "summary": ""}'
+
+    api.post("/analyze", json={"barcode": "1", "fixedScore": 39, "facts": "Nutri-Score C, NOVA group 4"})
+
+    prompt = groq.requests[0]["messages"][1]["content"]
+    assert "Open Food Facts data: Nutri-Score C, NOVA group 4" in prompt
+    assert "fixed at 39" in prompt
+
+
+def test_without_a_fixed_score_the_model_scores(api, groq):
+    groq.reply = '{"healthScore": 64, "summary": ""}'
+
+    body = api.post("/analyze", json={"barcode": "1"}).json()
+
+    assert body["healthScore"] == 64
+    assert "fixed at" not in groq.requests[0]["messages"][1]["content"]
 
 
 def test_analyze_without_a_key_is_unavailable(api, no_groq):
