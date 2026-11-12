@@ -56,7 +56,7 @@ Taken automatically by the Playwright end-to-end tests on the web version, with 
 - **Recent scans** – the last 20 products stay on the device; tap one to open it again.
 - **Caching** – every analyzed product is stored in PostgreSQL, so a repeat scan is instant.
 - **Web version** – the same app runs in a browser (`npm run web`).
-- **Greek and English**, light and dark theme, glassmorphism UI.
+- **Greek and English**, light and dark theme, glassmorphism UI, and a short animated intro (tap to skip; still with Reduce Motion).
 - **Free to run** – every external service used has a free tier, and `MOCK_AI=1` runs everything without a Groq key.
 
 ## How the score works
@@ -458,8 +458,8 @@ The backend's own docs are at `http://localhost:8080/swagger-ui.html` when it ru
 |-------|-------|-------|----------------|
 | Backend | 119 | JUnit 5, Mockito, MockMvc, Testcontainers | Cache rules, lookup chain, score formula, validation, rate limits, API key, CORS, real PostgreSQL, Flyway upgrades |
 | AI service | 46 | pytest, a fake Groq client | Reply validation, prompts, image sizes, shared secret, mock mode |
-| Mobile | 36 | Jest, React Native Testing Library | Product, fruit and history hooks, the API client, the product result screen |
-| End-to-end | 20 | Playwright | The API (including `400`, `401`, `413`, `429`) and the web app, against the real stack |
+| Mobile | 61 | Jest, React Native Testing Library | Product, fruit and history hooks, barcode formats, the API client, the product result screen, the intro |
+| End-to-end | 21 | Playwright | The API (including `400`, `401`, `413`, `429`) and the web app, against the real stack |
 
 No unit test needs an API key or a network connection: the product databases, the AI service and Groq are stubbed. `mvn verify` also runs the Testcontainers tests (skipped without Docker) and fails if line coverage drops below 80% (currently 88%).
 
