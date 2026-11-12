@@ -7,7 +7,6 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![CI](https://github.com/edisban/HealthScan/actions/workflows/ci.yml/badge.svg)
-![License](https://img.shields.io/badge/License-MIT-yellow)
 
 **Know what you eat and use, in seconds.**
 
@@ -113,7 +112,3 @@ caddy/        Optional HTTPS proxy
 ## Acknowledgements
 
 Product data from [Open Food Facts](https://world.openfoodfacts.org), [Open Beauty Facts](https://world.openbeautyfacts.org) and [Open Products Facts](https://world.openproductsfacts.org) under the [Open Database License](https://opendatacommons.org/licenses/odbl/1-0/), plus [UPCitemdb](https://www.upcitemdb.com) and [USDA FoodData Central](https://fdc.nal.usda.gov). Models served by [Groq](https://groq.com).
-
-## License
-
-[MIT](LICENSE)
