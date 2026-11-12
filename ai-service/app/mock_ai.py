@@ -22,11 +22,13 @@ FRUIT = {"isFruit": True, "fruitName": "apple", "quality": "good", "confidence":
 
 
 class MockGroq:
+    """Has the one method of the async OpenAI client that the service uses."""
+
     def __init__(self):
         self.requests = []
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
-    def _create(self, **kwargs):
+    async def _create(self, **kwargs):
         self.requests.append(kwargs)
         content = json.dumps(self._reply(kwargs))
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
@@ -37,7 +39,7 @@ class MockGroq:
             return SEARCH
         first = kwargs["messages"][0]
         system = first["content"] if first["role"] == "system" else ""
-        # Matched on wording from the system prompts in main.py
+        # Matched on wording from the system prompts in prompts.py
         if "food quality inspector" in system:
             return FRUIT
         if "read product packaging" in system:
