@@ -1,6 +1,8 @@
+import hmac
 import io
 import os
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Union
 from PIL import Image
@@ -11,6 +13,21 @@ except Exception:
     OpenAI = None
 
 app = FastAPI(title="Health Scan AI Service")
+
+# Shared with the backend; when set, every endpoint except /health needs it in X-Internal-Secret
+AI_SHARED_SECRET = os.getenv("AI_SHARED_SECRET", "")
+SECRET_HEADER = "X-Internal-Secret"
+
+
+@app.middleware("http")
+async def require_shared_secret(request: Request, call_next):
+    # /health stays open for the container healthcheck
+    if AI_SHARED_SECRET and request.url.path != "/health":
+        given = request.headers.get(SECRET_HEADER, "")
+        # Constant-time comparison, so response timing does not leak how much of the secret matched
+        if not hmac.compare_digest(given.encode("utf-8"), AI_SHARED_SECRET.encode("utf-8")):
+            return JSONResponse(status_code=401, content={"detail": "Missing or invalid internal secret"})
+    return await call_next(request)
 
 client = None
 if OpenAI is not None:

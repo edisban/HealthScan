@@ -58,6 +58,44 @@ def test_health(api):
     assert api.get("/health").json() == {"status": "ok"}
 
 
+@pytest.fixture
+def shared_secret(monkeypatch):
+    monkeypatch.setattr(main, "AI_SHARED_SECRET", "s3cret")
+    return "s3cret"
+
+
+def test_missing_secret_is_unauthorized(api, groq, shared_secret):
+    response = api.post("/analyze", json={"barcode": "1"})
+
+    assert response.status_code == 401
+    assert groq.requests == []
+
+
+def test_wrong_secret_is_unauthorized(api, groq, shared_secret):
+    response = api.post("/analyze", json={"barcode": "1"}, headers={main.SECRET_HEADER: "s3cre7"})
+
+    assert response.status_code == 401
+    assert groq.requests == []
+
+
+def test_every_model_endpoint_needs_the_secret(api, groq, shared_secret):
+    assert api.post("/read-label", files=jpeg()).status_code == 401
+    assert api.post("/analyze-image", files=jpeg()).status_code == 401
+    assert api.post("/search-product", json={"barcode": "1"}).status_code == 401
+
+
+def test_correct_secret_is_accepted(api, groq, shared_secret):
+    groq.reply = '{"healthScore": 50, "summary": ""}'
+
+    response = api.post("/analyze", json={"barcode": "1"}, headers={main.SECRET_HEADER: shared_secret})
+
+    assert response.status_code == 200
+
+
+def test_health_stays_open_for_the_container_healthcheck(api, shared_secret):
+    assert api.get("/health").status_code == 200
+
+
 @pytest.mark.parametrize("endpoint", [main.read_label, main.analyze_image, main.search_product, main.analyze])
 def test_model_calls_stay_off_the_event_loop(endpoint):
     assert not inspect.iscoroutinefunction(endpoint)

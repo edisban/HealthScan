@@ -671,7 +671,7 @@ const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarcodeScan
             <CameraView
               style={StyleSheet.absoluteFill}
               facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128"] }}
+              barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e"] }}
               onBarcodeScanned={scanned ? undefined : handleScan}
             />
             {/* Dimmed surround with a clear window for the barcode */}

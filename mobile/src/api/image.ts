@@ -1,4 +1,4 @@
-import { API_BASE } from "@/constants/api";
+import { request } from "./client";
 
 export interface ImageAnalysisResponse {
   fruitDetected: boolean;
@@ -12,15 +12,6 @@ export interface ImageAnalysisResponse {
 }
 
 export const imageApi = {
-  analyzeImage: async (dataUrl: string): Promise<ImageAnalysisResponse> => {
-    const apiResponse = await fetch(`${API_BASE}/api/v1/analyze-image-base64`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image: dataUrl }),
-    });
-    if (!apiResponse.ok) {
-      throw new Error(`HTTP ${apiResponse.status}`);
-    }
-    return apiResponse.json();
-  },
+  analyzeImage: (dataUrl: string): Promise<ImageAnalysisResponse> =>
+    request("/api/v1/analyze-image-base64", { method: "POST", body: JSON.stringify({ image: dataUrl }) }),
 };

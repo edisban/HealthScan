@@ -48,8 +48,8 @@ npm start                     # Expo dev server (or `npm start` from the repo ro
 ### Whole stack
 
 ```bash
-cp .env.example .env                  # set GROQ_API_KEY
-docker compose up -d --build          # postgres :5432, ai-service :8000, backend :8080
+cp .env.example .env                  # set GROQ_API_KEY, POSTGRES_PASSWORD, AI_SHARED_SECRET
+docker compose up -d --build          # only the backend is published, on :8080 (BACKEND_PORT)
 ```
 
 No test needs an API key or network access: the product databases, the AI service and Groq are stubbed.

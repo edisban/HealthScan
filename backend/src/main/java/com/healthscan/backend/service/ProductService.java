@@ -10,7 +10,6 @@ import com.healthscan.backend.entity.WebSearchMiss;
 import com.healthscan.backend.repository.ProductRepository;
 import com.healthscan.backend.repository.WebSearchMissRepository;
 import com.healthscan.backend.service.ProductLookupService.ProductInfo;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.client.reactive.ClientHttpRequest;
@@ -41,17 +40,13 @@ public class ProductService {
     private final WebClient webClient;
     private final ObjectMapper mapper = new ObjectMapper();
 
-    @Autowired
-    public ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService) {
-        this(repo, missRepo, lookupService, WebClient.builder().build());
-    }
-
-    // Lets tests replace the AI service with a stub
-    ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService, WebClient webClient) {
+    /** @param aiWebClient the client from {@code AiClientConfig}: AI service base URL plus its shared secret */
+    public ProductService(ProductRepository repo, WebSearchMissRepository missRepo, ProductLookupService lookupService,
+                          WebClient aiWebClient) {
         this.repo = repo;
         this.missRepo = missRepo;
         this.lookupService = lookupService;
-        this.webClient = webClient;
+        this.webClient = aiWebClient;
     }
 
     public ProductResponse analyzeProduct(String barcode, String lang) {
@@ -127,16 +122,11 @@ public class ProductService {
 
     private JsonNode callAi(String path, @NonNull BodyInserter<?, ? super ClientHttpRequest> body) {
         try {
-            return webClient.post().uri(aiBaseUrl() + path).body(body)
+            return webClient.post().uri(path).body(body)
                     .retrieve().bodyToMono(JsonNode.class).block(AI_CALL_TIMEOUT);
         } catch (Exception e) {
             return null;
         }
-    }
-
-    private static String aiBaseUrl() {
-        String envUrl = System.getenv("AI_SERVICE_URL");
-        return (envUrl == null || envUrl.isBlank()) ? "http://localhost:8000" : envUrl;
     }
 
     private static ProductResponse notFound(String barcode) {
@@ -171,7 +161,7 @@ public class ProductService {
         try {
             AiAnalyzeRequest aiReq = new AiAnalyzeRequest(product.getBarcode(), name, ingredientList, lang);
             AiAnalyzeResponse aiRes = webClient.post()
-                    .uri(aiBaseUrl() + "/analyze")
+                    .uri("/analyze")
                     .bodyValue(aiReq)
                     .retrieve()
                     .bodyToMono(AiAnalyzeResponse.class)

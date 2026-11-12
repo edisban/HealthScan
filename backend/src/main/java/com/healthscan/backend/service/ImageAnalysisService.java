@@ -16,14 +16,9 @@ public class ImageAnalysisService {
 
     private final WebClient webClient;
 
-    public ImageAnalysisService(WebClient.Builder builder) {
-        String aiUrl = System.getenv("AI_SERVICE_URL");
-        if (aiUrl == null || aiUrl.isBlank()) {
-            aiUrl = "http://localhost:8000";
-        }
-        this.webClient = builder != null
-                ? builder.baseUrl(aiUrl).build()
-                : WebClient.builder().baseUrl(aiUrl).build();
+    /** @param aiWebClient the client from {@code AiClientConfig}: AI service base URL plus its shared secret */
+    public ImageAnalysisService(WebClient aiWebClient) {
+        this.webClient = aiWebClient;
     }
 
     public ImageAnalysisResponse analyzeImage(byte[] imageBytes, String filename) {

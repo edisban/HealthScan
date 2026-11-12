@@ -31,6 +31,7 @@ Health Scan is a mobile app that scans product barcodes and fruit photos and tel
 - [API reference](#api-reference)
 - [Project structure](#project-structure)
 - [Testing and CI/CD](#testing-and-cicd)
+- [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
 - [Acknowledgements](#acknowledgements)
@@ -229,7 +230,7 @@ flowchart TD
 ### 1. Configure
 
 ```bash
-cp .env.example .env                # set GROQ_API_KEY
+cp .env.example .env                # set GROQ_API_KEY, POSTGRES_PASSWORD and AI_SHARED_SECRET
 cp mobile/.env.example mobile/.env  # set your computer's LAN IP
 ```
 
@@ -239,12 +240,14 @@ cp mobile/.env.example mobile/.env  # set your computer's LAN IP
 docker compose up -d --build
 ```
 
-This starts PostgreSQL, the AI service and the backend. Check that everything is up:
+This starts PostgreSQL, the AI service and the backend. The backend waits until the other two report healthy. Check that all three show `healthy`, then try a product:
 
 ```bash
-curl http://localhost:8000/health
+docker compose ps
 curl "http://localhost:8080/api/v1/product/3017620422003?lang=en"
 ```
+
+Only the backend is published on the host. PostgreSQL and the AI service are reachable only inside the Compose network.
 
 ### 3. Start the mobile app
 
@@ -260,12 +263,36 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 | Variable | File | Required | Description |
 |----------|------|----------|-------------|
 | `GROQ_API_KEY` | `.env` | Yes | Groq API key for scoring, label reading, fruit quality and web search |
+| `POSTGRES_PASSWORD` | `.env` | Yes | Database password. PostgreSQL reads it only when the `pgdata` volume is first created; an existing volume keeps its old password |
+| `AI_SHARED_SECRET` | `.env` | Yes | Secret the backend sends to the AI service in `X-Internal-Secret`. Generate one with `openssl rand -hex 32` |
+| `API_KEY` | `.env` | No | When set, the backend requires it in the `X-Api-Key` header. Empty disables the check |
 | `USDA_API_KEY` | `.env` | No | USDA FoodData Central key; defaults to the rate-limited `DEMO_KEY` |
+| `BACKEND_PORT` | `.env` | No | Host port for the backend; defaults to `8080` |
 | `EXPO_PUBLIC_API_BASE` | `mobile/.env` | Yes | Backend URL reachable from the phone, e.g. `http://192.168.1.10:8080` |
+| `EXPO_PUBLIC_API_KEY` | `mobile/.env` | No | Must match `API_KEY`; the app sends it in `X-Api-Key` |
+
+## Security
+
+The backend is the only public entry point, so it carries the protections:
+
+| Protection | Behaviour |
+|------------|-----------|
+| Input validation | Barcodes must be 8 to 14 digits and `lang` must be `el` or `en`; anything else is `400` |
+| Upload limit | Image bodies over 8 MB are `413`; text that is not valid base64 is `400` |
+| Rate limiting | Per client IP with Bucket4j: 10 requests a minute for the endpoints that call Groq (`/web-search`, `/label`, `/analyze-image*`) and 60 a minute for `GET /product`. Over the limit is `429` with a `Retry-After` header |
+| API key | Optional `X-Api-Key` header, checked only when `API_KEY` is set; a missing or wrong key is `401` |
+| Internal network | PostgreSQL and the AI service publish no ports, and the AI service rejects any request without the shared `X-Internal-Secret` (`401`), except `/health` |
+| Containers | The backend and the AI service run as an unprivileged user, not root |
+
+> **The API key is an abuse deterrent, not real authentication.** It is built into the app bundle, so anyone with the app can extract it. It stops casual scripts from spending your Groq quota; it does not identify users. Real authentication would need per-user accounts and tokens.
+
+Rate limits are per IP address as the backend sees it. Behind a reverse proxy every client would share the proxy's address, so the limiter would need the forwarded client address instead.
 
 ## API reference
 
 ### Backend (`http://localhost:8080/api/v1`)
+
+Errors use [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem JSON: `400` invalid barcode, language or image, `401` missing or wrong API key, `413` image over 8 MB, `429` rate limit (see `Retry-After`).
 
 | Method | Path | Body | Description |
 |--------|------|------|-------------|
@@ -297,7 +324,9 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 
 </details>
 
-### AI service (`http://localhost:8000`)
+### AI service (internal, `http://ai-service:8000`)
+
+Reachable only from the backend on the Compose network. Every endpoint except `/health` requires the `X-Internal-Secret` header.
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -307,7 +336,7 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 | `POST` | `/search-product` | Find a product by barcode on the web |
 | `GET` | `/health` | Health check |
 
-Interactive docs are available at `http://localhost:8000/docs` (FastAPI Swagger UI).
+Interactive docs are at `/docs` (FastAPI Swagger UI). To open them, run the AI service on its own with `uvicorn main:app` and no `AI_SHARED_SECRET`.
 
 ## Project structure
 
@@ -362,6 +391,10 @@ cd mobile && npm test && npm run typecheck                            # Jest, Re
 | Product not found | The web search runs first; if it fails, use the label photo. Small or regional brands are often missing from public databases |
 | Expo Go asks to sign in to Expo CLI | Run `npx expo login` (or set `EXPO_TOKEN`) with the same account as the phone |
 | Containers not running | `docker compose ps` and `docker compose logs backend` |
+| `docker compose` says a variable must be set | Fill in `POSTGRES_PASSWORD` and `AI_SHARED_SECRET` in `.env` |
+| Backend cannot log in to PostgreSQL | An existing `pgdata` volume keeps the password it was created with. Set `POSTGRES_PASSWORD` to that value, or recreate the volume with `docker compose down -v` (this deletes the cached products) |
+| `401` from the backend | `EXPO_PUBLIC_API_KEY` in `mobile/.env` must match `API_KEY` in `.env`; restart `npm start` after changing it |
+| `429 Too Many Requests` | Wait for the number of seconds in `Retry-After` |
 
 ## Roadmap
 
