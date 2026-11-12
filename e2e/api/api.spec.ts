@@ -97,10 +97,13 @@ test.describe("security", () => {
   });
 
   test("429 with Retry-After once the Groq endpoints' limit is used up", async ({ request }) => {
-    // An invalid barcode is rejected with 400 without calling Groq, but still counts toward the limit
-    let response = await request.post("/api/v1/product/abc/web-search", { headers: auth });
-    for (let i = 0; i < 30 && response.status() !== 429; i++) {
-      response = await request.post("/api/v1/product/abc/web-search", { headers: auth });
+    // An invalid barcode is rejected with 400 without calling Groq, but still counts toward the limit.
+    // Each request claims another client address: only the HTTPS proxy may set it, so it changes nothing.
+    const fromSpoofedClient = (i: number) =>
+      request.post("/api/v1/product/abc/web-search", { headers: { ...auth, "X-Forwarded-For": `203.0.113.${i}` } });
+    let response = await fromSpoofedClient(0);
+    for (let i = 1; i <= 30 && response.status() !== 429; i++) {
+      response = await fromSpoofedClient(i);
     }
 
     expect(response.status()).toBe(429);
