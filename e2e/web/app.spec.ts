@@ -22,7 +22,18 @@ test.beforeEach(async ({ page }) => {
   // Start in English, with an empty history
   await page.evaluate(() => localStorage.clear());
   await page.reload();
+  // The intro covers the app for about 2 seconds after it opens
+  await expect(page.getByTestId("intro")).toHaveCount(0, { timeout: 10_000 });
   await page.getByRole("button", { name: "Language EN" }).click();
+});
+
+test("the intro shows the app name, then reveals the home screen", async ({ page }) => {
+  await page.reload();
+
+  await expect(page.getByTestId("intro")).toBeVisible();
+  await expect(page.getByTestId("intro").getByText("Health Scan")).toBeVisible();
+  await expect(page.getByTestId("intro")).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByText("Scan Barcode")).toBeVisible();
 });
 
 test("home screen", async ({ page }) => {
