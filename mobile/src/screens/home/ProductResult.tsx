@@ -43,8 +43,15 @@ export const ProductResult = ({ result, strings, theme }: ProductResultProps) =>
           </View>
         </View>
         <View style={[styles.divider, { backgroundColor: theme.palette.border }]} />
-        <Gauge score={score} label={label} caption={strings.healthScore} />
-        {!!result.scoreSource && (
+        {result.healthScore == null ? (
+          // The analysis failed (e.g. the AI service was down): say so instead of showing a red 0
+          <View style={styles.infoBox} testID="score-unavailable">
+            <Text style={[styles.body, { color: text.secondary, textAlign: "center" }]}>{strings.scoreUnavailable}</Text>
+          </View>
+        ) : (
+          <Gauge score={score} label={label} caption={strings.healthScore} />
+        )}
+        {result.healthScore != null && !!result.scoreSource && (
           <Text style={[styles.scoreBasis, { color: text.muted }]}>{scoreBasis(result, strings)}</Text>
         )}
       </Card>

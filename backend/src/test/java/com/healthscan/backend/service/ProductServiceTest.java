@@ -303,6 +303,19 @@ class ProductServiceTest {
     }
 
     @Test
+    void labelPhotoNeverReplacesAnExistingProduct() {
+        givenRow(row(40, "en", "Open Food Facts"));
+        aiReplies.put("/read-label", IDENTIFIED);
+
+        ProductResponse response = service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en");
+
+        assertThat(response.getSource()).isEqualTo("Open Food Facts");
+        assertThat(response.getName()).isEqualTo("Saved name");
+        assertThat(aiCalls).doesNotContain("/read-label");
+        verify(repo, never()).save(any());
+    }
+
+    @Test
     void unreadableLabelIsNotFound() {
         aiReplies.put("/read-label", NO_MATCH);
 

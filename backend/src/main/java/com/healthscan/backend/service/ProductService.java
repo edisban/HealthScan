@@ -73,6 +73,8 @@ public class ProductService {
 
     /** Identifies an unknown product from a photo of its label, then scores it like any other product. */
     public ProductResponse analyzeLabel(String barcode, byte[] imageBytes, String lang) {
+        // A label photo only fills in unknown barcodes; it never replaces a product everyone else sees
+        if (repo.findByBarcode(barcode).isPresent()) return analyzeProduct(barcode, lang);
         byte[] bytes = imageBytes != null ? imageBytes : new byte[0];
         ByteArrayResource image = new ByteArrayResource(bytes) {
             @Override

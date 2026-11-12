@@ -63,6 +63,7 @@ export interface AppStrings {
   webSearchSkip: string;
   scoreFromNutriScore: string;
   scoreEstimated: string;
+  scoreUnavailable: string;
   disclaimer: string;
   recentScans: string;
   clearHistory: string;
@@ -137,6 +138,7 @@ export const strings: Record<string, AppStrings> = {
     webSearchSkip: "Παράλειψη και φωτογραφία ετικέτας",
     scoreFromNutriScore: "Υπολογισμένο από Nutri-Score",
     scoreEstimated: "Εκτίμηση AI",
+    scoreUnavailable: "Η βαθμολογία δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκίμασε ξανά σε λίγο.",
     recentScans: "Πρόσφατες σαρώσεις",
     clearHistory: "Καθαρισμός",
     disclaimer: "Μόνο ενδεικτικά, όχι ιατρική συμβουλή. Η βαθμολογία βασίζεται στο Nutri-Score όταν υπάρχει, αλλιώς σε εκτίμηση AI.",
@@ -209,6 +211,7 @@ export const strings: Record<string, AppStrings> = {
     webSearchSkip: "Skip and use a label photo",
     scoreFromNutriScore: "Calculated from Nutri-Score",
     scoreEstimated: "AI estimate",
+    scoreUnavailable: "The score is not available right now. Try again in a moment.",
     recentScans: "Recent scans",
     clearHistory: "Clear",
     disclaimer: "For guidance only, not medical advice. Scores come from Nutri-Score data when available, otherwise from an AI estimate.",
