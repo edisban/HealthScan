@@ -50,7 +50,7 @@ Taken automatically by the Playwright end-to-end tests on the web version, with 
 
 ## Features
 
-- **Barcode scanning** – looks the product up in five free databases and gives a 0–100 health score, calculated from Nutri-Score, NOVA and additives when Open Food Facts has them; an LLM writes the summary, positives, negatives, ingredients and nutrition facts.
+- **Barcode scanning** – reads every common format: EAN/UPC, ITF-14, Code 128/39/93, and the square codes on newer packs (GS1 DataMatrix and GS1 Digital Link QR), from which it takes the product's barcode number. It looks the product up in five free databases and gives a 0–100 health score, calculated from Nutri-Score, NOVA and additives when Open Food Facts has them; an LLM writes the summary, positives, negatives, ingredients and nutrition facts.
 - **Unknown products** – if no database knows the barcode, the app searches the web automatically, and the user can photograph the ingredient label (read by a vision model) if that fails too. The result is saved, so the next scan is instant.
 - **Fruit quality check** – a vision model identifies any fruit in a photo and rates it as fresh, spoiled or uncertain. If the photo isn't a fruit, the app says what it shows instead.
 - **Recent scans** – the last 20 products stay on the device; tap one to open it again.

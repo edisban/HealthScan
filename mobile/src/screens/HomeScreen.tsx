@@ -9,6 +9,7 @@ import { useProduct } from "@/hooks/useProduct";
 import { useCamera } from "@/hooks/useCamera";
 import { useImageAnalysis } from "@/hooks/useImageAnalysis";
 import { useHistory } from "@/hooks/useHistory";
+import { extractProductCode } from "@/utils/barcode";
 import { HomeContent } from "./home/HomeContent";
 import { LangToggle } from "./home/LangToggle";
 import { LoadingCard, ErrorCard } from "./home/StatusCard";
@@ -46,8 +47,10 @@ export const HomeScreen = () => {
     if (result && result.found !== false && !loading) history.add(result);
   }, [result, loading]);
 
+  // Typed digits, or a pasted GS1 Digital Link; anything else goes to the backend, which explains the error
   const handleManual = () => {
-    if (manualBarcode.trim()) fetchProduct(manualBarcode.trim());
+    const typed = manualBarcode.trim();
+    if (typed) fetchProduct(extractProductCode(typed) ?? typed);
   };
 
   const handleReset = () => {

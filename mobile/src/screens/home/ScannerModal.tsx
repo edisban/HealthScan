@@ -5,6 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/ui";
 import type { AppStrings } from "@/constants/strings";
+import { extractProductCode, SCANNED_BARCODE_TYPES } from "@/utils/barcode";
 import { FRAME_H, styles } from "./styles";
 
 interface ScannerModalProps {
@@ -12,11 +13,17 @@ interface ScannerModalProps {
   granted: boolean;
   strings: AppStrings;
   onRequestClose: () => void;
-  onBarcodeScanned: (data: string) => void;
+  // Receives the product code (8 to 14 digits), already taken out of QR, DataMatrix or GS1 data
+  onBarcodeScanned: (productCode: string) => void;
 }
+
+// How long "not a product barcode" stays on screen before the next code is read
+const NOT_PRODUCT_PAUSE_MS = 2500;
 
 export const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarcodeScanned }: ScannerModalProps) => {
   const [scanned, setScanned] = useState(false);
+  const [notProduct, setNotProduct] = useState(false);
+  const notProductTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The camera fires several events per barcode before state updates; a ref blocks the repeats immediately
   const scannedRef = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -42,14 +49,28 @@ export const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarc
     if (visible) {
       scannedRef.current = false;
       setScanned(false);
+      setNotProduct(false);
     }
+    return () => {
+      if (notProductTimer.current) clearTimeout(notProductTimer.current);
+    };
   }, [visible]);
 
   const handleScan = ({ data }: { data: string }) => {
     if (!data || scannedRef.current) return;
     scannedRef.current = true;
+    const productCode = extractProductCode(data);
+    if (!productCode) {
+      // A code without a product, e.g. a website QR: say so, then keep scanning
+      setNotProduct(true);
+      notProductTimer.current = setTimeout(() => {
+        scannedRef.current = false;
+        setNotProduct(false);
+      }, NOT_PRODUCT_PAUSE_MS);
+      return;
+    }
     setScanned(true);
-    onBarcodeScanned(data);
+    onBarcodeScanned(productCode);
   };
 
   const hasCamera = granted && permission?.granted;
@@ -62,7 +83,7 @@ export const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarc
             <CameraView
               style={StyleSheet.absoluteFill}
               facing="back"
-              barcodeScannerSettings={{ barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e"] }}
+              barcodeScannerSettings={{ barcodeTypes: SCANNED_BARCODE_TYPES }}
               onBarcodeScanned={scanned ? undefined : handleScan}
             />
             {/* Dimmed surround with a clear window for the barcode */}
@@ -82,7 +103,7 @@ export const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarc
                 <View style={styles.hintPill}>
                   <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
                   <Ionicons name="barcode-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.hintText}>{strings.hint}</Text>
+                  <Text style={styles.hintText}>{notProduct ? strings.notProductCode : strings.hint}</Text>
                 </View>
               </View>
             </View>
