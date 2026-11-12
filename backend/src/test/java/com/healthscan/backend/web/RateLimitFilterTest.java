@@ -15,6 +15,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -46,7 +48,7 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        ProductResponse product = new ProductResponse(BARCODE, "Yogurt", "", "", 72, "Fine");
+        ProductResponse product = product("5201234567890", "Yogurt", 72);
         when(productService.analyzeProduct(anyString(), anyString())).thenReturn(product);
         when(productService.searchWeb(anyString(), anyString())).thenReturn(product);
         when(productService.analyzeLabel(anyString(), any(), anyString())).thenReturn(product);
@@ -129,5 +131,9 @@ class RateLimitFilterTest {
         assertThat(RateLimitFilter.tierOf("POST", "/api/v1/analyze-image-base64")).isEqualTo(RateLimitFilter.Tier.STRICT);
         assertThat(RateLimitFilter.tierOf("GET", "/api/v1/product/123")).isEqualTo(RateLimitFilter.Tier.RELAXED);
         assertThat(RateLimitFilter.tierOf("GET", "/actuator/health")).isNull();
+    }
+    private static ProductResponse product(String barcode, String name, Integer score) {
+        return new ProductResponse(barcode, true, name, "", "Open Food Facts", score, "AI estimate", "", null,
+                "Fine", "", "", List.of(), List.of(), List.of());
     }
 }

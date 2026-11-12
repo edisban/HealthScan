@@ -16,6 +16,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Base64;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -55,7 +56,8 @@ class ProductControllerTest {
     }
 
     private static ProductResponse yogurt() {
-        return new ProductResponse(BARCODE, "Yogurt", "", "", 72, "Fine");
+        return new ProductResponse(BARCODE, true, "Yogurt", "", "Open Food Facts", 72, "AI estimate", "", null,
+                "Fine", "", "", List.of(), List.of(), List.of());
     }
 
     @Test
@@ -69,9 +71,7 @@ class ProductControllerTest {
 
     @Test
     void unknownBarcodeIsAnOkResponseWithFoundFalse() throws Exception {
-        ProductResponse unknown = new ProductResponse(BARCODE, "", "", "", null, "");
-        unknown.setFound(false);
-        when(productService.analyzeProduct(BARCODE, "en")).thenReturn(unknown);
+        when(productService.analyzeProduct(BARCODE, "en")).thenReturn(ProductResponse.notFound(BARCODE));
 
         mvc.perform(get("/api/v1/product/" + BARCODE).param("lang", "en"))
                 .andExpect(status().isOk())

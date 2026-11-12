@@ -31,8 +31,8 @@ class ImageAnalysisServiceTest {
 
         ImageAnalysisResponse response = service.analyzeImage(IMAGE, "photo.jpg");
 
-        assertThat(response.isFruitDetected()).isFalse();
-        assertThat(response.getDetectedObject()).isEqualTo("cell phone");
+        assertThat(response.fruitDetected()).isFalse();
+        assertThat(response.detectedObject()).isEqualTo("cell phone");
     }
 
     @Test

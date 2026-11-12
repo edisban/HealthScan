@@ -96,7 +96,7 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(40);
+        assertThat(response.healthScore()).isEqualTo(40);
         verify(lookup, never()).lookup(any());
         assertThat(aiCalls).isEmpty();
     }
@@ -112,8 +112,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(72);
-        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(response.scoreSource()).isEqualTo("Nutri-Score");
     }
 
     @Test
@@ -123,10 +123,10 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.isFound()).isTrue();
-        assertThat(response.getHealthScore()).isEqualTo(72);
-        assertThat(response.getSource()).isEqualTo("Open Food Facts");
-        assertThat(response.getPros()).containsExactly("Protein");
+        assertThat(response.found()).isTrue();
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(response.source()).isEqualTo("Open Food Facts");
+        assertThat(response.pros()).containsExactly("Protein");
         Product saved = savedProduct();
         assertThat(saved.getLang()).isEqualTo("en");
         assertThat(saved.getProsJson()).isEqualTo("[\"Protein\"]");
@@ -138,7 +138,7 @@ class ProductServiceTest {
         givenDatabaseHit();
         aiReplies.put("/analyze", ANALYSIS);
 
-        assertThat(service.analyzeProduct(BARCODE, "en").getHealthScore()).isEqualTo(72);
+        assertThat(service.analyzeProduct(BARCODE, "en").healthScore()).isEqualTo(72);
     }
 
     @Test
@@ -159,15 +159,15 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "el");
 
-        assertThat(response.isFound()).isTrue();
-        assertThat(response.getName()).isEqualTo("Saved name");
-        assertThat(response.getSource()).isEqualTo("Label photo");
+        assertThat(response.found()).isTrue();
+        assertThat(response.name()).isEqualTo("Saved name");
+        assertThat(response.source()).isEqualTo("Label photo");
         assertThat(savedProduct().getIngredientsText()).isEqualTo("saved ingredients");
     }
 
     @Test
     void unknownBarcodeIsNotFoundAndNotSaved() {
-        assertThat(service.analyzeProduct(BARCODE, "en").isFound()).isFalse();
+        assertThat(service.analyzeProduct(BARCODE, "en").found()).isFalse();
         verify(repo, never()).save(any());
     }
 
@@ -177,8 +177,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.isFound()).isTrue();
-        assertThat(response.getHealthScore()).isNull();
+        assertThat(response.found()).isTrue();
+        assertThat(response.healthScore()).isNull();
         assertThat(savedProduct().getHealthScore()).isNull();
     }
 
@@ -188,7 +188,7 @@ class ProductServiceTest {
         aiReplies.put("/analyze", ANALYSIS);
         when(repo.save(any())).thenThrow(new DataIntegrityViolationException("duplicate barcode"));
 
-        assertThat(service.analyzeProduct(BARCODE, "en").getHealthScore()).isEqualTo(72);
+        assertThat(service.analyzeProduct(BARCODE, "en").healthScore()).isEqualTo(72);
     }
 
     @Test
@@ -197,7 +197,7 @@ class ProductServiceTest {
 
         ProductResponse response = service.searchWeb(BARCODE, "en");
 
-        assertThat(response.getSource()).isEqualTo("Label photo");
+        assertThat(response.source()).isEqualTo("Label photo");
         assertThat(aiCalls).doesNotContain("/search-product");
     }
 
@@ -208,8 +208,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.searchWeb(BARCODE, "en");
 
-        assertThat(response.getName()).isEqualTo("Yogurt");
-        assertThat(response.getSource()).isEqualTo("Web search");
+        assertThat(response.name()).isEqualTo("Yogurt");
+        assertThat(response.source()).isEqualTo("Web search");
         assertThat(aiCalls).containsExactly("/search-product", "/analyze");
         verify(missRepo, never()).save(any());
     }
@@ -218,7 +218,7 @@ class ProductServiceTest {
     void webSearchNoMatchIsRemembered() {
         aiReplies.put("/search-product", NO_MATCH);
 
-        assertThat(service.searchWeb(BARCODE, "en").isFound()).isFalse();
+        assertThat(service.searchWeb(BARCODE, "en").found()).isFalse();
 
         ArgumentCaptor<WebSearchMiss> miss = ArgumentCaptor.forClass(WebSearchMiss.class);
         verify(missRepo).save(miss.capture());
@@ -230,7 +230,7 @@ class ProductServiceTest {
         Instant anHourAgo = Instant.now().minus(Duration.ofHours(1));
         when(missRepo.findById(BARCODE)).thenReturn(Optional.of(new WebSearchMiss(BARCODE, anHourAgo)));
 
-        assertThat(service.searchWeb(BARCODE, "en").isFound()).isFalse();
+        assertThat(service.searchWeb(BARCODE, "en").found()).isFalse();
         assertThat(aiCalls).isEmpty();
     }
 
@@ -247,7 +247,7 @@ class ProductServiceTest {
 
     @Test
     void aiOutageDuringSearchIsNotRememberedAsAMiss() {
-        assertThat(service.searchWeb(BARCODE, "en").isFound()).isFalse();
+        assertThat(service.searchWeb(BARCODE, "en").found()).isFalse();
         verify(missRepo, never()).save(any());
     }
 
@@ -258,8 +258,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en");
 
-        assertThat(response.getSource()).isEqualTo("Label photo");
-        assertThat(response.getHealthScore()).isEqualTo(72);
+        assertThat(response.source()).isEqualTo("Label photo");
+        assertThat(response.healthScore()).isEqualTo(72);
     }
 
     @Test
@@ -271,11 +271,11 @@ class ProductServiceTest {
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
         // 55 for grade C, minus 10 for NOVA 4, minus 6 for three additives; the AI said 72
-        assertThat(response.getHealthScore()).isEqualTo(39);
-        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
-        assertThat(response.getNutriScore()).isEqualTo("c");
-        assertThat(response.getNovaGroup()).isEqualTo(4);
-        assertThat(response.getExplanation()).isEqualTo("Fine");
+        assertThat(response.healthScore()).isEqualTo(39);
+        assertThat(response.scoreSource()).isEqualTo("Nutri-Score");
+        assertThat(response.nutriScore()).isEqualTo("c");
+        assertThat(response.novaGroup()).isEqualTo(4);
+        assertThat(response.explanation()).isEqualTo("Fine");
     }
 
     @Test
@@ -285,8 +285,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(90);
-        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
+        assertThat(response.healthScore()).isEqualTo(90);
+        assertThat(response.scoreSource()).isEqualTo("Nutri-Score");
         // No language is stored, so the next scan asks the AI again for the text
         assertThat(savedProduct().getLang()).isNull();
     }
@@ -298,8 +298,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(72);
-        assertThat(response.getScoreSource()).isEqualTo("AI estimate");
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(response.scoreSource()).isEqualTo("AI estimate");
     }
 
     @Test
@@ -309,8 +309,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en");
 
-        assertThat(response.getSource()).isEqualTo("Open Food Facts");
-        assertThat(response.getName()).isEqualTo("Saved name");
+        assertThat(response.source()).isEqualTo("Open Food Facts");
+        assertThat(response.name()).isEqualTo("Saved name");
         assertThat(aiCalls).doesNotContain("/read-label");
         verify(repo, never()).save(any());
     }
@@ -319,7 +319,7 @@ class ProductServiceTest {
     void unreadableLabelIsNotFound() {
         aiReplies.put("/read-label", NO_MATCH);
 
-        assertThat(service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en").isFound()).isFalse();
+        assertThat(service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en").found()).isFalse();
         verify(repo, never()).save(any());
     }
 }

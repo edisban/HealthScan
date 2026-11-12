@@ -26,7 +26,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -140,9 +139,7 @@ public class ProductService {
     }
 
     private static ProductResponse notFound(String barcode) {
-        ProductResponse res = new ProductResponse(barcode, "", "", "", null, "");
-        res.setFound(false);
-        return res;
+        return ProductResponse.notFound(barcode);
     }
 
     private ProductResponse saveAndAnalyze(Product cached, String barcode, ProductInfo info, String lang) {
@@ -179,12 +176,11 @@ public class ProductService {
 
     /** Fills score, summary and details from the AI service; leaves them empty if it is unavailable. */
     private void analyzeWithAi(Product product, String name, String lang, Integer fixedScore) {
+        // Sent as written: splitting on commas would break ingredients such as "salt (sea salt, iodine)"
         String ingredients = product.getIngredientsText() == null ? "" : product.getIngredientsText();
-        List<String> ingredientList = ingredients.isEmpty() ? List.of() : Arrays.asList(ingredients.split(","));
         try {
-            AiAnalyzeRequest aiReq = new AiAnalyzeRequest(product.getBarcode(), name, ingredientList, lang);
-            aiReq.setFixedScore(fixedScore);
-            aiReq.setFacts(HealthScore.describe(product.getNutriScore(), product.getNovaGroup(), product.getAdditivesCount()));
+            AiAnalyzeRequest aiReq = new AiAnalyzeRequest(product.getBarcode(), name, ingredients, lang, fixedScore,
+                    HealthScore.describe(product.getNutriScore(), product.getNovaGroup(), product.getAdditivesCount()));
             AiAnalyzeResponse aiRes = webClient.post()
                     .uri("/analyze")
                     .bodyValue(aiReq)
@@ -192,14 +188,14 @@ public class ProductService {
                     .bodyToMono(AiAnalyzeResponse.class)
                     .block(AiClientConfig.TIMEOUT);
             if (aiRes != null) {
-                product.setHealthScore(aiRes.getHealthScore());
-                product.setExplanation(aiRes.getSummary());
+                product.setHealthScore(aiRes.healthScore());
+                product.setExplanation(aiRes.summary());
                 product.setLang(lang);
-                product.setOrigin(aiRes.getOrigin());
-                product.setNutrition(aiRes.getNutrition());
-                product.setIngredientsJson(mapper.writeValueAsString(aiRes.getIngredients()));
-                product.setProsJson(mapper.writeValueAsString(aiRes.getPros()));
-                product.setConsJson(mapper.writeValueAsString(aiRes.getCons()));
+                product.setOrigin(aiRes.origin());
+                product.setNutrition(aiRes.nutrition());
+                product.setIngredientsJson(mapper.writeValueAsString(aiRes.ingredients()));
+                product.setProsJson(mapper.writeValueAsString(aiRes.pros()));
+                product.setConsJson(mapper.writeValueAsString(aiRes.cons()));
             }
         } catch (Exception e) {
             // AI service unavailable; the product is saved without a score and re-analyzed on the next scan
@@ -208,29 +204,35 @@ public class ProductService {
     }
 
     private ProductResponse toResponse(Product product) {
-        ProductResponse res = new ProductResponse(
-                product.getBarcode(), product.getName(), product.getImageUrl(),
-                product.getIngredientsText(), product.getHealthScore(), product.getExplanation(),
-                product.getName(),
-                product.getOrigin() != null ? product.getOrigin() : "",
+        return new ProductResponse(
+                product.getBarcode(),
+                true,
+                text(product.getName()),
+                text(product.getImageUrl()),
+                text(product.getSource()),
+                product.getHealthScore(),
+                text(product.getScoreSource()),
+                text(product.getNutriScore()),
+                product.getNovaGroup(),
+                text(product.getExplanation()),
+                text(product.getOrigin()),
+                text(product.getNutrition()),
                 readList(product.getIngredientsJson()),
-                product.getNutrition() != null ? product.getNutrition() : "",
                 readList(product.getProsJson()),
                 readList(product.getConsJson()));
-        res.setSource(product.getSource() != null ? product.getSource() : "");
-        res.setScoreSource(product.getScoreSource() != null ? product.getScoreSource() : "");
-        res.setNutriScore(product.getNutriScore() != null ? product.getNutriScore() : "");
-        res.setNovaGroup(product.getNovaGroup());
-        return res;
+    }
+
+    private static String text(String value) {
+        return value == null ? "" : value;
     }
 
     private List<String> readList(String json) {
-        if (json == null || json.isBlank()) return null;
+        if (json == null || json.isBlank()) return List.of();
         try {
-            return Arrays.asList(mapper.readValue(json, String[].class));
+            return List.of(mapper.readValue(json, String[].class));
         } catch (Exception e) {
             log.warn("Stored list is not a JSON array: {}", e.toString());
-            return null;
+            return List.of();
         }
     }
 }

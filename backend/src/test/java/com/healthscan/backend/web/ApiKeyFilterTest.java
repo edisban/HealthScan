@@ -12,6 +12,8 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -58,7 +60,7 @@ class ApiKeyFilterTest {
     @Test
     void correctKeyIsAccepted() throws Exception {
         when(productService.analyzeProduct(BARCODE, "el"))
-                .thenReturn(new ProductResponse(BARCODE, "Yogurt", "", "", 72, "Fine"));
+                .thenReturn(product("5201234567890", "Yogurt", 72));
 
         mvc.perform(get("/api/v1/product/" + BARCODE).header(ApiKeyFilter.HEADER, "test-key"))
                 .andExpect(status().isOk());
@@ -71,5 +73,9 @@ class ApiKeyFilterTest {
                 .andExpect(status().isUnauthorized());
 
         verifyNoInteractions(imageAnalysisService);
+    }
+    private static ProductResponse product(String barcode, String name, Integer score) {
+        return new ProductResponse(barcode, true, name, "", "Open Food Facts", score, "AI estimate", "", null,
+                "Fine", "", "", List.of(), List.of(), List.of());
     }
 }

@@ -52,7 +52,7 @@ public class ProductController {
             @PathVariable @Pattern(regexp = BARCODE, message = BARCODE_MESSAGE) String barcode,
             @RequestParam(defaultValue = "el") @Pattern(regexp = LANG, message = LANG_MESSAGE) String lang,
             @RequestBody ImageAnalysisBase64Request req) {
-        byte[] image = Base64Image.decode(req.getImage(), maxImageBytes);
+        byte[] image = Base64Image.decode(req.image(), maxImageBytes);
         return ResponseEntity.ok(productService.analyzeLabel(barcode, image, lang));
     }
 
@@ -84,7 +84,7 @@ public class ProductController {
 
     @PostMapping(path = "/analyze-image-base64", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ImageAnalysisResponse> analyzeImageBase64(@RequestBody ImageAnalysisBase64Request req) {
-        byte[] image = Base64Image.decode(req.getImage(), maxImageBytes);
+        byte[] image = Base64Image.decode(req.image(), maxImageBytes);
         return ResponseEntity.ok(imageAnalysisService.analyzeImage(image, "photo.jpg"));
     }
 }

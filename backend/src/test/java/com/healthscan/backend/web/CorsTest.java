@@ -11,6 +11,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.util.List;
+
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -63,11 +65,15 @@ class CorsTest {
     @Test
     void allowedRequestCarriesTheCorsHeaders() throws Exception {
         when(productService.analyzeProduct("5201234567890", "el"))
-                .thenReturn(new ProductResponse("5201234567890", "Yogurt", "", "", 72, "Fine"));
+                .thenReturn(product("5201234567890", "Yogurt", 72));
 
         mvc.perform(get(PRODUCT).header("Origin", WEB_APP).header(ApiKeyFilter.HEADER, "test-key"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", WEB_APP))
                 .andExpect(header().string("Access-Control-Expose-Headers", "Retry-After"));
+    }
+    private static ProductResponse product(String barcode, String name, Integer score) {
+        return new ProductResponse(barcode, true, name, "", "Open Food Facts", score, "AI estimate", "", null,
+                "Fine", "", "", List.of(), List.of(), List.of());
     }
 }

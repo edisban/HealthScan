@@ -77,9 +77,9 @@ class PostgresIntegrationTest {
         ProductResponse second = service.analyzeProduct(BARCODE, "en");
 
         // Grade E (15), NOVA 4 (-10), two additives (-4)
-        assertThat(first.getHealthScore()).isEqualTo(1);
-        assertThat(second.getHealthScore()).isEqualTo(1);
-        assertThat(second.getCons()).containsExactly("Sugar", "Palm oil");
+        assertThat(first.healthScore()).isEqualTo(1);
+        assertThat(second.healthScore()).isEqualTo(1);
+        assertThat(second.cons()).containsExactly("Sugar", "Palm oil");
         assertThat(aiCalls.get()).as("second request comes from the database").isEqualTo(1);
 
         Product stored = repo.findByBarcode(BARCODE).orElseThrow();
@@ -90,8 +90,8 @@ class PostgresIntegrationTest {
 
     @Test
     void failedWebSearchIsRememberedInTheDatabase() {
-        assertThat(service.searchWeb("2900000017283", "en").isFound()).isFalse();
-        assertThat(service.searchWeb("2900000017283", "en").isFound()).isFalse();
+        assertThat(service.searchWeb("2900000017283", "en").found()).isFalse();
+        assertThat(service.searchWeb("2900000017283", "en").found()).isFalse();
 
         assertThat(missRepo.findById("2900000017283")).isPresent();
         assertThat(aiCalls.get()).as("second search answered from the database").isEqualTo(1);
