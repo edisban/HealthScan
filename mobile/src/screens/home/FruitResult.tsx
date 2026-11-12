@@ -55,7 +55,7 @@ export const FruitResult = ({ result, strings, theme }: FruitResultProps) => {
             </View>
             <View style={styles.confRow}>
               <Text style={[styles.infoLabel, { color: text.muted }]}>{strings.confidence}</Text>
-              <Text style={[styles.infoLabel, { color: text.primary }]}>{confidence}%</Text>
+              <Text style={[styles.infoLabel, { color: text.primary }]}>{confidenceLabel(confidence, strings)}</Text>
             </View>
             <View style={[styles.track, { backgroundColor: theme.palette.border }]}>
               <View style={[styles.trackFill, { width: `${confidence}%`, backgroundColor: tone.color }]} />
@@ -67,3 +67,7 @@ export const FruitResult = ({ result, strings, theme }: FruitResultProps) => {
     </Card>
   );
 };
+
+/** How sure the model is, in words; the bar below still shows the exact amount. */
+export const confidenceLabel = (confidence: number, strings: AppStrings): string =>
+  confidence >= 80 ? strings.confidenceHigh : confidence >= 50 ? strings.confidenceMid : strings.confidenceLow;

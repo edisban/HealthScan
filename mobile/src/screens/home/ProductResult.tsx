@@ -37,7 +37,11 @@ export const ProductResult = ({ result, strings, theme }: ProductResultProps) =>
               <Chip label={result.barcode} icon="barcode-outline" />
               {!!result.origin && <Chip label={result.origin} icon="location-outline" />}
               {!!result.source && (
-                <Chip label={result.source} icon={sourceIcon(result.source)} color={theme.palette.accent.main} />
+                <Chip
+                  label={sourceLabel(result.source, strings)}
+                  icon={sourceIcon(result.source)}
+                  color={theme.palette.accent.main}
+                />
               )}
             </View>
           </View>
@@ -51,8 +55,13 @@ export const ProductResult = ({ result, strings, theme }: ProductResultProps) =>
         ) : (
           <Gauge score={score} label={label} caption={strings.healthScore} />
         )}
-        {result.healthScore != null && !!result.scoreSource && (
-          <Text style={[styles.scoreBasis, { color: text.muted }]}>{scoreBasis(result, strings)}</Text>
+        {result.healthScore != null && (
+          <>
+            <ScoreFacts result={result} strings={strings} theme={theme} />
+            {!!result.scoreSource && (
+              <Text style={[styles.scoreBasis, { color: text.muted }]}>{scoreBasis(result, strings)}</Text>
+            )}
+          </>
         )}
       </Card>
 
@@ -101,13 +110,41 @@ export const ProductResult = ({ result, strings, theme }: ProductResultProps) =>
   );
 };
 
-// "Calculated from Nutri-Score C · NOVA 4" or "AI estimate"
-export const scoreBasis = (result: Product, strings: AppStrings): string => {
-  if (result.scoreSource !== "Nutri-Score") return strings.scoreEstimated;
-  const grade = result.nutriScore ? ` ${result.nutriScore.toUpperCase()}` : "";
-  const nova = result.novaGroup ? ` · NOVA ${result.novaGroup}` : "";
-  return `${strings.scoreFromNutriScore}${grade}${nova}`;
+// The Nutri-Score letter is printed on many packs, so it stays; the NOVA group is shown in words
+const ScoreFacts = ({ result, strings, theme }: ProductResultProps) => {
+  const grade = isGrade(result.nutriScore) ? result.nutriScore.toUpperCase() : "";
+  const processing = processingLabel(result.novaGroup, strings);
+  if (!grade && !processing) return null;
+  return (
+    <View style={styles.factRow} testID="score-facts">
+      {!!grade && <Chip label={`Nutri-Score ${grade}`} icon="nutrition-outline" color={gradeColor(grade, theme)} />}
+      {!!processing && (
+        <Chip label={processing} icon="construct-outline" color={processingColor(result.novaGroup!, theme)} />
+      )}
+    </View>
+  );
 };
+
+const isGrade = (grade?: string): grade is string => !!grade && /^[a-e]$/i.test(grade);
+
+// Green for A and B, amber for C, red for D and E
+const gradeColor = (grade: string, theme: Theme): string =>
+  grade <= "B" ? theme.palette.success.main : grade === "C" ? theme.palette.warning.main : theme.palette.error.main;
+
+const processingColor = (nova: number, theme: Theme): string =>
+  nova <= 2 ? theme.palette.success.main : nova === 3 ? theme.palette.warning.main : theme.palette.error.main;
+
+/** NOVA 1 to 4 in plain words, e.g. "Ultra-processed"; empty when unknown. */
+export const processingLabel = (nova: number | null | undefined, strings: AppStrings): string =>
+  nova != null && nova >= 1 && nova <= 4 ? strings.processing[nova - 1] : "";
+
+/** Where the score comes from, in a sentence. */
+export const scoreBasis = (result: Product, strings: AppStrings): string =>
+  result.scoreSource === "Nutri-Score" ? strings.scoreFromNutriScore : strings.scoreEstimated;
+
+/** Database names stay as they are; the app's own sources are translated. */
+export const sourceLabel = (source: string, strings: AppStrings): string =>
+  source === "Label photo" ? strings.sourceLabelPhoto : source === "Web search" ? strings.sourceWebSearch : source;
 
 const sourceIcon = (source: string): IconName =>
   source === "Label photo" ? "camera-outline" : source === "Web search" ? "globe-outline" : "server-outline";

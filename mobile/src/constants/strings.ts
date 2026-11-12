@@ -63,6 +63,13 @@ export interface AppStrings {
   webSearchSkip: string;
   scoreFromNutriScore: string;
   scoreEstimated: string;
+  // What NOVA groups 1 to 4 mean, in plain words
+  processing: [string, string, string, string];
+  sourceLabelPhoto: string;
+  sourceWebSearch: string;
+  confidenceHigh: string;
+  confidenceMid: string;
+  confidenceLow: string;
   scoreUnavailable: string;
   notProductCode: string;
   qrIsLink: string;
@@ -112,9 +119,9 @@ export const strings: Record<string, AppStrings> = {
     origin: "Προέλευση",
     nutrition: "Διατροφικά στοιχεία",
     healthScore: "από 100",
-    scoreLabelHigh: "Υψηλή διατροφική αξία",
-    scoreLabelMid: "Μέτρια αξία",
-    scoreLabelLow: "Προσοχή στα συστατικά",
+    scoreLabelHigh: "Καλή επιλογή",
+    scoreLabelMid: "Με μέτρο",
+    scoreLabelLow: "Καλύτερα σπάνια",
     footer: "Health Scan © 2026",
     fruitDetected: "Ανιχνεύθηκε φρούτο",
     fruitQuality: "Ποιότητα",
@@ -138,14 +145,20 @@ export const strings: Record<string, AppStrings> = {
     labelLibrary: "Ετικέτα από τη βιβλιοθήκη",
     labelLibrarySub: "Χρησιμοποίησε υπάρχουσα φωτογραφία",
     webSearchSkip: "Παράλειψη και φωτογραφία ετικέτας",
-    scoreFromNutriScore: "Υπολογισμένο από Nutri-Score",
-    scoreEstimated: "Εκτίμηση AI",
+    scoreFromNutriScore: "Υπολογίστηκε από τα επίσημα διατροφικά στοιχεία του προϊόντος",
+    scoreEstimated: "Εκτίμηση AI, γιατί δεν υπάρχουν επίσημα διατροφικά στοιχεία",
+    processing: ["Ανεπεξέργαστο", "Βασικό υλικό μαγειρικής", "Επεξεργασμένο", "Υπερεπεξεργασμένο"],
+    sourceLabelPhoto: "Από την ετικέτα",
+    sourceWebSearch: "Από το διαδίκτυο",
+    confidenceHigh: "Πολύ σίγουρο",
+    confidenceMid: "Αρκετά σίγουρο",
+    confidenceLow: "Όχι πολύ σίγουρο",
     scoreUnavailable: "Η βαθμολογία δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκίμασε ξανά σε λίγο.",
     notProductCode: "Αυτός ο κωδικός δεν είναι προϊόντος. Δοκίμασε άλλον.",
     qrIsLink: "Αυτό το QR είναι link. Σκάναρε το barcode με τις γραμμές.",
     recentScans: "Πρόσφατες σαρώσεις",
     clearHistory: "Καθαρισμός",
-    disclaimer: "Μόνο ενδεικτικά, όχι ιατρική συμβουλή. Η βαθμολογία βασίζεται στο Nutri-Score όταν υπάρχει, αλλιώς σε εκτίμηση AI.",
+    disclaimer: "Μόνο ενδεικτικά, όχι ιατρική συμβουλή.",
     labelLoading: "Ανάγνωση ετικέτας",
     labelLoadingSub: "Το AI διαβάζει τα συστατικά…",
     webLoading: "Αναζήτηση στο διαδίκτυο",
@@ -187,9 +200,9 @@ export const strings: Record<string, AppStrings> = {
     origin: "Origin",
     nutrition: "Nutrition facts",
     healthScore: "out of 100",
-    scoreLabelHigh: "High nutritional value",
-    scoreLabelMid: "Moderate value",
-    scoreLabelLow: "Watch the ingredients",
+    scoreLabelHigh: "Good choice",
+    scoreLabelMid: "Fine in moderation",
+    scoreLabelLow: "Best as an occasional treat",
     footer: "Health Scan © 2026",
     fruitDetected: "Fruit detected",
     fruitQuality: "Quality",
@@ -213,14 +226,20 @@ export const strings: Record<string, AppStrings> = {
     labelLibrary: "Label from library",
     labelLibrarySub: "Use an existing photo",
     webSearchSkip: "Skip and use a label photo",
-    scoreFromNutriScore: "Calculated from Nutri-Score",
-    scoreEstimated: "AI estimate",
+    scoreFromNutriScore: "Calculated from the product's official nutrition data",
+    scoreEstimated: "AI estimate, as there is no official nutrition data",
+    processing: ["Unprocessed", "Cooking ingredient", "Processed", "Ultra-processed"],
+    sourceLabelPhoto: "From the label",
+    sourceWebSearch: "From the web",
+    confidenceHigh: "Very sure",
+    confidenceMid: "Fairly sure",
+    confidenceLow: "Not very sure",
     scoreUnavailable: "The score is not available right now. Try again in a moment.",
     notProductCode: "This code is not a product barcode. Try another one.",
     qrIsLink: "This QR is a website link. Scan the barcode with lines.",
     recentScans: "Recent scans",
     clearHistory: "Clear",
-    disclaimer: "For guidance only, not medical advice. Scores come from Nutri-Score data when available, otherwise from an AI estimate.",
+    disclaimer: "For guidance only, not medical advice.",
     labelLoading: "Reading the label",
     labelLoadingSub: "AI is reading the ingredients…",
     webLoading: "Searching the web",
