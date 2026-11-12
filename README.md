@@ -3,20 +3,31 @@
 ![React Native](https://img.shields.io/badge/React_Native-0.88-61DAFB?logo=react&logoColor=black)
 ![Expo](https://img.shields.io/badge/Expo-SDK_58-000020?logo=expo&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3-6DB33F?logo=springboot&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.13-6DB33F?logo=springboot&logoColor=white)
 ![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![CI](https://github.com/edisban/HealthScan/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 **Know what you eat and use, in seconds.**
 
 Health Scan is a mobile app that scans product barcodes and fruit photos and tells you how healthy they are. Scan food, cosmetics and other everyday products to get a 0–100 health score with positives, negatives, ingredients and nutrition facts, or take a photo of a fruit to check whether it is fresh or spoiled.
 
+## Screenshots
+
+| Home | Product | Recent scans | Not found |
+|------|---------|--------------|-----------|
+| ![Home screen](docs/screenshots/home.png) | ![Product result](docs/screenshots/product.png) | ![Recent scans](docs/screenshots/history.png) | ![Product not found](docs/screenshots/not-found.png) |
+
+Taken automatically by the Playwright end-to-end tests on the web version, with `MOCK_AI=1`, so the analysis texts are placeholders rather than real model output.
+
 ## Table of contents
 
+- [Screenshots](#screenshots)
 - [Features](#features)
+- [How the score works](#how-the-score-works)
 - [Architecture](#architecture)
   - [System overview](#system-overview)
   - [Components](#components)
@@ -30,8 +41,8 @@ Health Scan is a mobile app that scans product barcodes and fruit photos and tel
 - [Configuration](#configuration)
 - [API reference](#api-reference)
 - [Project structure](#project-structure)
-- [Testing and CI/CD](#testing-and-cicd)
 - [Security](#security)
+- [Testing](#testing)
 - [Troubleshooting](#troubleshooting)
 - [Roadmap](#roadmap)
 - [Acknowledgements](#acknowledgements)
@@ -39,12 +50,26 @@ Health Scan is a mobile app that scans product barcodes and fruit photos and tel
 
 ## Features
 
-- **Barcode scanning** – looks the product up in five free databases and scores it with an LLM: health score, summary, positives, negatives, ingredients, origin and nutrition facts.
+- **Barcode scanning** – looks the product up in five free databases and gives a 0–100 health score, calculated from Nutri-Score, NOVA and additives when Open Food Facts has them; an LLM writes the summary, positives, negatives, ingredients and nutrition facts.
 - **Unknown products** – if no database knows the barcode, the app searches the web automatically, and the user can photograph the ingredient label (read by a vision model) if that fails too. The result is saved, so the next scan is instant.
 - **Fruit quality check** – a vision model identifies any fruit in a photo and rates it as fresh, spoiled or uncertain. If the photo isn't a fruit, the app says what it shows instead.
-- **Caching** – every analyzed product is stored in PostgreSQL per language.
+- **Recent scans** – the last 20 products stay on the device; tap one to open it again.
+- **Caching** – every analyzed product is stored in PostgreSQL, so a repeat scan is instant.
+- **Web version** – the same app runs in a browser (`npm run web`).
 - **Greek and English**, light and dark theme, glassmorphism UI.
-- **Free to run** – every external service used has a free tier.
+- **Free to run** – every external service used has a free tier, and `MOCK_AI=1` runs everything without a Groq key.
+
+## How the score works
+
+When Open Food Facts has a Nutri-Score grade for the product, the score is calculated, so the same product always gets the same number:
+
+| Input | Effect |
+|-------|--------|
+| Nutri-Score grade | Starting point: A 90, B 72, C 55, D 35, E 15 |
+| NOVA group | NOVA 4 (ultra-processed) −10, NOVA 3 (processed) −5 |
+| Additives | −2 each, at most −10 |
+
+The result is kept between 0 and 100. The LLM receives the score and these facts and only writes the explanation; if it returns another number, the calculated one is used. Products without a Nutri-Score (cosmetics, label photos, web search results, most non-European foods) get an AI estimate instead, and the app labels which one it is. The app also shows that scores are guidance, not medical advice.
 
 ## Architecture
 
@@ -170,6 +195,14 @@ erDiagram
         text ingredients_json "JSON array"
         text pros_json "JSON array"
         text cons_json "JSON array"
+        varchar nutri_score "a-e, from Open Food Facts"
+        int nova_group
+        int additives_count
+        varchar score_source "Nutri-Score or AI estimate"
+    }
+    WEB_SEARCH_MISSES {
+        varchar barcode PK
+        timestamp searched_at
     }
 ```
 
@@ -180,6 +213,7 @@ Caching rules:
 - A failed web search is recorded in `web_search_misses` and not repeated for a day, which protects the Groq quota. AI outages are not recorded.
 - Label photo and web search products are in no database, so a request in the other language re-analyzes them from the cached row.
 - Concurrent scans of the same new barcode are safe: a duplicate insert is ignored and every request gets the analysis.
+- Rows saved before scores were calculated (no `score_source`) are analyzed once more.
 - The schema is managed by Hibernate (`ddl-auto=update`).
 
 ### Mobile app structure
@@ -205,6 +239,7 @@ flowchart TD
 - **One scoring path.** Label photos and web search only *identify* the product (name and ingredients); scoring always goes through the same `/analyze` endpoint, so results are consistent regardless of source.
 - **Lookup chain, cheapest first.** Free open databases come first, rate-limited APIs next, then an automatic web search the user can skip. The app starts the search after the lookup returns, so the first response stays fast.
 - **Vision model only for fruit.** An earlier version ran YOLOv8 first, but it only knew three fruits and saved no LLM calls, so it was removed. The user's square crop already centres the fruit.
+- **Calculated score, AI text.** A formula over Open Food Facts data is reproducible and explainable; the LLM only explains it.
 - **Base64 JSON uploads.** Photos are sent as base64 in JSON, which avoids multipart quirks in React Native; the image picker provides the base64 directly.
 
 ## Data sources
@@ -223,7 +258,7 @@ flowchart TD
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) with Docker Compose
-- [Node.js](https://nodejs.org/) 20+
+- [Node.js](https://nodejs.org/) 22+
 - A free [Groq API key](https://console.groq.com/keys)
 - The [Expo Go](https://expo.dev/go) app on your phone
 
@@ -258,6 +293,8 @@ npm start
 
 Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). The phone must be on the same Wi-Fi network as your computer.
 
+To run it in a browser instead, set `CORS_ALLOWED_ORIGINS=http://localhost:8081` in `.env`, restart the stack, and run `cd mobile && npm run web`.
+
 ## Configuration
 
 | Variable | File | Required | Description |
@@ -268,6 +305,8 @@ Scan the QR code with your phone's camera (iOS) or the Expo Go app (Android). Th
 | `API_KEY` | `.env` | No | When set, the backend requires it in the `X-Api-Key` header. Empty disables the check |
 | `USDA_API_KEY` | `.env` | No | USDA FoodData Central key; defaults to the rate-limited `DEMO_KEY` |
 | `BACKEND_PORT` | `.env` | No | Host port for the backend; defaults to `8080` |
+| `MOCK_AI` | `.env` | No | `1` makes the AI service answer with canned data, with no Groq key or network (demos, end-to-end tests) |
+| `CORS_ALLOWED_ORIGINS` | `.env` | No | Comma-separated origins allowed to call the API from a browser, for the web version. Empty turns CORS off |
 | `EXPO_PUBLIC_API_BASE` | `mobile/.env` | Yes | Backend URL reachable from the phone, e.g. `http://192.168.1.10:8080` |
 | `EXPO_PUBLIC_API_KEY` | `mobile/.env` | No | Must match `API_KEY`; the app sends it in `X-Api-Key` |
 
@@ -283,10 +322,16 @@ The backend is the only public entry point, so it carries the protections:
 | API key | Optional `X-Api-Key` header, checked only when `API_KEY` is set; a missing or wrong key is `401` |
 | Internal network | PostgreSQL and the AI service publish no ports, and the AI service rejects any request without the shared `X-Internal-Secret` (`401`), except `/health` |
 | Containers | The backend and the AI service run as an unprivileged user, not root |
+| Errors | RFC 9457 problem JSON with a short message; no stack traces leave the server |
+| AI replies | Validated with Pydantic before use; an unusable reply is `502`, and every Groq call has a timeout |
+| CORS | Off unless `CORS_ALLOWED_ORIGINS` lists the web app's origin |
+| Production profile | `SPRING_PROFILES_ACTIVE=prod` (set by docker-compose) turns off SQL logging and the API docs |
 
 > **The API key is an abuse deterrent, not real authentication.** It is built into the app bundle, so anyone with the app can extract it. It stops casual scripts from spending your Groq quota; it does not identify users. Real authentication would need per-user accounts and tokens.
 
 Rate limits are per IP address as the backend sees it. Behind a reverse proxy every client would share the proxy's address, so the limiter would need the forwarded client address instead.
+
+**Scanning in CI.** Every push and pull request runs [Gitleaks](https://github.com/gitleaks/gitleaks) for committed secrets, [CodeQL](https://codeql.github.com) for Java, Python and TypeScript, and [Trivy](https://trivy.dev) on both Docker images. Dependabot opens weekly update pull requests. Trivy reports but does not fail the build: some of the vulnerabilities it finds in the backend's dependencies are fixed only in Spring Framework 7, which needs the Spring Boot 4 migration on the roadmap.
 
 ## API reference
 
@@ -338,6 +383,8 @@ Reachable only from the backend on the Compose network. Every endpoint except `/
 
 Interactive docs are at `/docs` (FastAPI Swagger UI). To open them, run the AI service on its own with `uvicorn main:app` and no `AI_SHARED_SECRET`.
 
+The backend's own docs are at `http://localhost:8080/swagger-ui.html` when it runs without the `prod` profile (for example with `mvn spring-boot:run`).
+
 ## Project structure
 
 ```
@@ -346,17 +393,23 @@ Interactive docs are at `/docs` (FastAPI Swagger UI). To open them, run the AI s
 ├── .env.example
 ├── ai-service/                # FastAPI + Groq
 │   ├── main.py
+│   ├── mock_ai.py             # canned answers for MOCK_AI=1
+│   ├── tests/
 │   ├── requirements.txt
 │   └── Dockerfile
 ├── backend/                   # Spring Boot REST API
 │   ├── pom.xml
 │   ├── Dockerfile
 │   └── src/main/java/com/healthscan/backend/
+│       ├── config/            # settings, AI client, CORS
 │       ├── controller/        # REST endpoints
-│       ├── service/           # lookup chain, AI orchestration, image analysis
+│       ├── service/           # lookup chain, score formula, AI orchestration
+│       ├── web/               # rate limit, API key, upload limit, error handling
 │       ├── entity/            # JPA entity
 │       ├── repository/        # Spring Data repository
 │       └── dto/               # request/response models
+├── e2e/                       # Playwright API and web tests
+├── docs/screenshots/          # produced by the end-to-end tests
 └── mobile/                    # Expo app
     ├── App.tsx
     ├── .env.example
@@ -365,22 +418,51 @@ Interactive docs are at `/docs` (FastAPI Swagger UI). To open them, run the AI s
         ├── components/ui/     # design system
         ├── constants/         # API URL, strings, theme
         ├── context/           # theme and language providers
-        ├── hooks/             # useProduct, useImageAnalysis, useCamera
-        ├── screens/           # HomeScreen
+        ├── hooks/             # useProduct, useImageAnalysis, useHistory, useCamera
+        ├── screens/           # HomeScreen and its parts in screens/home
         └── utils/             # photo capture and encoding
 ```
 
-## Testing and CI/CD
+## Testing
 
-No test needs an API key or a network connection: the product databases, the AI service and Groq are all stubbed.
+| Suite | Tests | Tools | What it covers |
+|-------|-------|-------|----------------|
+| Backend | 116 | JUnit 5, Mockito, MockMvc, Testcontainers | Cache rules, lookup chain, score formula, validation, rate limits, API key, CORS, real PostgreSQL |
+| AI service | 46 | pytest, a fake Groq client | Reply validation, prompts, image sizes, shared secret, mock mode |
+| Mobile | 29 | Jest, React Native Testing Library | Product, fruit and history hooks, the API client |
+| End-to-end | 20 | Playwright | The API (including `400`, `401`, `413`, `429`) and the web app, against the real stack |
+
+No unit test needs an API key or a network connection: the product databases, the AI service and Groq are stubbed. `mvn verify` also runs the Testcontainers tests (skipped without Docker) and fails if line coverage drops below 80% (currently 88%).
 
 ```bash
-cd backend && mvn test                                                # JUnit, Mockito, MockMvc
+cd backend && mvn verify
 cd ai-service && pip install -r requirements-dev.txt && python -m pytest
-cd mobile && npm test && npm run typecheck                            # Jest, React Native Testing Library
+cd mobile && npm test && npm run typecheck
 ```
 
-[GitHub Actions](.github/workflows/ci.yml) runs all three suites and the type check on every push to `main` and on every pull request, then builds both Docker images. Pushes to the default branch also publish the images to GitHub Container Registry as `ghcr.io/<owner>/healthscan-backend` and `ghcr.io/<owner>/healthscan-ai-service`, tagged with the commit SHA and `latest`.
+The end-to-end tests run against the whole stack in mock mode, so they need no Groq key:
+
+```bash
+export MOCK_AI=1 POSTGRES_PASSWORD=e2e AI_SHARED_SECRET=e2e API_KEY=e2e-key CORS_ALLOWED_ORIGINS=http://localhost:8081
+docker compose up -d --build --wait
+(cd mobile && EXPO_PUBLIC_API_BASE=http://localhost:8080 EXPO_PUBLIC_API_KEY=e2e-key npm run build:web)
+cd e2e && npm ci && npx playwright install chromium
+npx playwright test          # npm run screenshots also refreshes docs/screenshots
+```
+
+### CI/CD
+
+```mermaid
+flowchart LR
+    A[Backend<br/>mvn verify] --> D[End-to-end<br/>Playwright on the mock stack]
+    B[AI service<br/>pytest] --> D
+    C[Mobile<br/>Jest + tsc] --> D
+    D --> F[Images<br/>build + Trivy scan]
+    E[Gitleaks] --> F
+    F -->|default branch| G[Publish to GHCR]
+```
+
+[GitHub Actions](.github/workflows/ci.yml) runs this on every push to `main` and every pull request, and [CodeQL](.github/workflows/codeql.yml) runs alongside it. Pushes to the default branch publish the images to GitHub Container Registry as `ghcr.io/<owner>/healthscan-backend` and `ghcr.io/<owner>/healthscan-ai-service`, tagged with the commit SHA and `latest`. Nothing is deployed automatically yet.
 
 ## Troubleshooting
 
@@ -398,9 +480,11 @@ cd mobile && npm test && npm run typecheck                            # Jest, Re
 
 ## Roadmap
 
-- [ ] Scan history and favorites on the device
+- [x] Scan history on the device
+- [x] Score from Nutri-Score and NOVA, with the AI writing only the explanation
+- [ ] Spring Boot 4 migration, which closes the remaining Trivy findings
 - [ ] Category-specific scoring for cosmetics and non-food products
-- [ ] Nutri-Score and NOVA group from Open Food Facts
+- [ ] Compare two products side by side
 - [ ] Contribute label-photo results back to Open Food Facts
 - [ ] Deploy the published images to a hosted environment
 
