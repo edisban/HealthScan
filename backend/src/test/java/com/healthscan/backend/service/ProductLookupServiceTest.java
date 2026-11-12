@@ -8,10 +8,11 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -28,27 +29,31 @@ class ProductLookupServiceTest {
             {"status":1,"product":{"product_name":"Yogurt","brands":"Fage, Other",
              "image_url":"http://img/1.jpg","ingredients_text":"milk"}}""";
 
-    // Database stub: host -> JSON reply; a missing host answers 404
-    private final Map<String, String> replies = new HashMap<>();
-    private final List<String> hostsCalled = new ArrayList<>();
+    // Database stub: host -> JSON reply (a missing host answers 404) and an optional delay before replying
+    private final Map<String, String> replies = new ConcurrentHashMap<>();
+    private final Map<String, Duration> delays = new ConcurrentHashMap<>();
+    private final List<String> hostsCalled = new CopyOnWriteArrayList<>();
 
+    private WebClient web;
     private ProductLookupService service;
 
     @BeforeEach
     void setUp() {
-        WebClient web = WebClient.builder().exchangeFunction(request -> {
+        web = WebClient.builder().exchangeFunction(request -> {
             String host = request.url().getHost();
             hostsCalled.add(host);
             String reply = replies.get(host);
-            if (reply == null) return Mono.just(ClientResponse.create(HttpStatus.NOT_FOUND).build());
-            return Mono.just(ClientResponse.create(HttpStatus.OK)
-                    .header("Content-Type", "application/json").body(reply).build());
+            ClientResponse response = reply == null
+                    ? ClientResponse.create(HttpStatus.NOT_FOUND).build()
+                    : ClientResponse.create(HttpStatus.OK).header("Content-Type", "application/json").body(reply).build();
+            Duration delay = delays.get(host);
+            return delay == null ? Mono.just(response) : Mono.just(response).delayElement(delay);
         }).build();
         service = new ProductLookupService(web, "test-key");
     }
 
     @Test
-    void firstHitStopsTheChain() {
+    void openFactsHitSkipsTheQuotaLimitedDatabases() {
         replies.put(FOOD, OPEN_FACTS_HIT);
 
         ProductInfo info = service.lookup(BARCODE);
@@ -57,7 +62,7 @@ class ProductLookupServiceTest {
         assertThat(info.brand()).isEqualTo("Fage");
         assertThat(info.ingredients()).isEqualTo("milk");
         assertThat(info.source()).isEqualTo("Open Food Facts");
-        assertThat(hostsCalled).containsExactly(FOOD);
+        assertThat(hostsCalled).doesNotContain(UPC, USDA);
     }
 
     @Test
@@ -65,7 +70,43 @@ class ProductLookupServiceTest {
         replies.put(BEAUTY, OPEN_FACTS_HIT);
 
         assertThat(service.lookup(BARCODE).source()).isEqualTo("Open Beauty Facts");
-        assertThat(hostsCalled).containsExactly(FOOD, BEAUTY);
+        assertThat(hostsCalled).contains(FOOD, BEAUTY).doesNotContain(UPC, USDA);
+    }
+
+    @Test
+    void priorityWinsOverTheFasterReply() {
+        replies.put(FOOD, OPEN_FACTS_HIT);
+        replies.put(PRODUCTS, OPEN_FACTS_HIT);
+        delays.put(FOOD, Duration.ofMillis(300));
+
+        assertThat(service.lookup(BARCODE).source()).isEqualTo("Open Food Facts");
+    }
+
+    @Test
+    void openFactsDatabasesAreAskedAtTheSameTime() {
+        Duration slow = Duration.ofMillis(600);
+        delays.put(FOOD, slow);
+        delays.put(BEAUTY, slow);
+        delays.put(PRODUCTS, slow);
+        replies.put(PRODUCTS, OPEN_FACTS_HIT);
+
+        long start = System.nanoTime();
+        ProductInfo info = service.lookup(BARCODE);
+        Duration took = Duration.ofNanos(System.nanoTime() - start);
+
+        assertThat(info.source()).isEqualTo("Open Products Facts");
+        // One after the other would take three delays
+        assertThat(took).isLessThan(slow.multipliedBy(2));
+    }
+
+    @Test
+    void slowDatabaseCountsAsAMiss() {
+        replies.put(FOOD, OPEN_FACTS_HIT);
+        replies.put(BEAUTY, OPEN_FACTS_HIT);
+        delays.put(FOOD, Duration.ofSeconds(5));
+        ProductLookupService impatient = new ProductLookupService(web, "test-key", Duration.ofMillis(200));
+
+        assertThat(impatient.lookup(BARCODE).source()).isEqualTo("Open Beauty Facts");
     }
 
     @Test
@@ -77,6 +118,14 @@ class ProductLookupServiceTest {
     }
 
     @Test
+    void replyThatIsNotJsonIsTreatedAsAMiss() {
+        replies.put(FOOD, "<html>Service unavailable</html>");
+        replies.put(BEAUTY, OPEN_FACTS_HIT);
+
+        assertThat(service.lookup(BARCODE).source()).isEqualTo("Open Beauty Facts");
+    }
+
+    @Test
     void upcItemDbHasNoIngredients() {
         replies.put(UPC, "{\"items\":[{\"title\":\"Shampoo\",\"brand\":\"Acme\",\"images\":[\"http://img/2.jpg\"]}]}");
 
@@ -84,6 +133,15 @@ class ProductLookupServiceTest {
 
         assertThat(info.source()).isEqualTo("UPCitemdb");
         assertThat(info.ingredients()).isEmpty();
+    }
+
+    @Test
+    void upcItemDbComesBeforeUsda() {
+        replies.put(UPC, "{\"items\":[{\"title\":\"Shampoo\"}]}");
+        replies.put(USDA, "{\"foods\":[{\"gtinUpc\":\"5201234567890\",\"description\":\"Oats\"}]}");
+        delays.put(UPC, Duration.ofMillis(300));
+
+        assertThat(service.lookup(BARCODE).source()).isEqualTo("UPCitemdb");
     }
 
     @Test
@@ -111,7 +169,7 @@ class ProductLookupServiceTest {
     void nonNumericBarcodeSkipsUpcItemDbAndUsda() {
         service.lookup("ABC-123");
 
-        assertThat(hostsCalled).containsExactly(FOOD, BEAUTY, PRODUCTS);
+        assertThat(hostsCalled).containsExactlyInAnyOrder(FOOD, BEAUTY, PRODUCTS);
     }
 
     @Test
@@ -140,6 +198,6 @@ class ProductLookupServiceTest {
     @Test
     void unknownEverywhereReturnsNull() {
         assertThat(service.lookup(BARCODE)).isNull();
-        assertThat(hostsCalled).containsExactly(FOOD, BEAUTY, PRODUCTS, UPC, USDA);
+        assertThat(hostsCalled).containsExactlyInAnyOrder(FOOD, BEAUTY, PRODUCTS, UPC, USDA);
     }
 }
