@@ -23,6 +23,8 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - AI_SHARED_SECRET=${AI_SHARED_SECRET:?Set AI_SHARED_SECRET in .env}
+      # MOCK_AI=1 answers with canned data instead of calling Groq (demos and E2E tests)
+      - MOCK_AI=${MOCK_AI:-}
     # No published port: only the backend reaches it, and it must send AI_SHARED_SECRET
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]

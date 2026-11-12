@@ -55,7 +55,76 @@ def sent_image_size(request):
 
 
 def test_health(api):
-    assert api.get("/health").json() == {"status": "ok"}
+    assert api.get("/health").json() == {"status": "ok", "mock": False}
+
+
+def test_groq_calls_have_a_timeout_and_one_retry():
+    assert main.client.timeout == main.GROQ_TIMEOUT_SECONDS
+    assert main.client.max_retries == 1
+
+
+# --- Model replies are validated before use ---
+
+def test_list_given_as_a_single_string_is_accepted(api, groq):
+    groq.reply = '{"healthScore": 50, "summary": "s", "pros": "High protein", "cons": null}'
+
+    body = api.post("/analyze", json={"barcode": "1"}).json()
+
+    assert body["pros"] == ["High protein"]
+    assert body["cons"] == []
+
+
+def test_score_out_of_range_is_clamped(api, groq):
+    groq.reply = '{"healthScore": 150, "summary": ""}'
+
+    assert api.post("/analyze", json={"barcode": "1"}).json()["healthScore"] == 100
+
+
+@pytest.mark.parametrize("reply", ['{"healthScore": "very healthy"}', "not json at all {", '["a", "list"]'])
+def test_unusable_reply_is_a_bad_gateway_not_a_crash(api, groq, reply):
+    groq.reply = reply
+
+    response = api.post("/analyze", json={"barcode": "1"})
+
+    assert response.status_code == 502
+
+
+def test_unknown_fruit_quality_becomes_uncertain(api, groq):
+    groq.reply = '{"isFruit": true, "fruitName": "kiwi", "quality": "excellent", "confidence": 140}'
+
+    body = api.post("/analyze-image", files=jpeg()).json()
+
+    assert body["quality"] == "uncertain"
+    assert body["confidence"] == 100.0
+
+
+def test_null_label_fields_are_empty_strings(api, groq):
+    groq.reply = '{"readable": true, "productName": "Yogurt", "brand": null, "ingredients": null}'
+
+    body = api.post("/read-label", files=jpeg()).json()
+
+    assert body == {"found": True, "productName": "Yogurt", "brand": "", "ingredients": ""}
+
+
+# --- MOCK_AI mode ---
+
+@pytest.fixture
+def mock_ai(monkeypatch):
+    from mock_ai import MockGroq
+    monkeypatch.setattr(main, "client", MockGroq())
+
+
+def test_mock_mode_scores_without_groq(api, mock_ai):
+    body = api.post("/analyze", json={"barcode": "1", "fixedScore": 39}).json()
+
+    assert body["healthScore"] == 39
+    assert body["summary"].startswith("Mock analysis")
+
+
+def test_mock_mode_answers_every_endpoint(api, mock_ai):
+    assert api.post("/analyze-image", files=jpeg()).json()["fruitName"] == "apple"
+    assert api.post("/read-label", files=jpeg()).json()["productName"] == "Mock label product"
+    assert api.post("/search-product", json={"barcode": "1"}).json()["found"] is False
 
 
 @pytest.fixture
