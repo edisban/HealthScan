@@ -29,6 +29,9 @@ const ELEMENT_STRING_GTIN = /^\(?01\)?(\d{14})/;
 /** GTIN-14 with a leading 0 is the same product as the EAN-13 printed on the pack. */
 const normalize = (digits: string): string => (digits.length === 14 && digits.startsWith("0") ? digits.slice(1) : digits);
 
+/** True for a QR code that is a website link, such as the marketing codes printed beside a barcode. */
+export const isWebLink = (raw: string): boolean => /^https?:\/\//i.test(raw.trim());
+
 /**
  * Turns whatever the camera read into the product code the backend looks up (8 to 14 digits),
  * or null when the code holds no product, such as an ordinary website QR code.

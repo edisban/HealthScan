@@ -1,4 +1,4 @@
-import { extractProductCode, SCANNED_BARCODE_TYPES } from "../barcode";
+import { extractProductCode, isWebLink, SCANNED_BARCODE_TYPES } from "../barcode";
 
 describe("plain barcodes", () => {
   it.each([
@@ -41,6 +41,7 @@ describe("GS1 Digital Link QR codes", () => {
 describe("codes without a product", () => {
   it.each([
     ["a website QR code", "https://www.example.com/recipes"],
+    ["Nestlé's Cocoa Plan QR on Fitness cereal", "https://nes.tl/q/cpw-cocoa-plan"],
     ["text", "Hello"],
     ["too few digits", "1234567"],
     ["too many digits", "123456789012345"],
@@ -49,6 +50,13 @@ describe("codes without a product", () => {
   ])("%s gives null", (_, raw) => {
     expect(extractProductCode(raw)).toBeNull();
   });
+});
+
+it("tells a website link from other codes without a product", () => {
+  expect(isWebLink("https://nes.tl/q/cpw-cocoa-plan")).toBe(true);
+  expect(isWebLink("HTTP://example.com")).toBe(true);
+  expect(isWebLink("(10)AB12")).toBe(false);
+  expect(isWebLink("Hello")).toBe(false);
 });
 
 it("the scanner reads every format the camera supports", () => {

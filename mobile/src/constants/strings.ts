@@ -65,6 +65,7 @@ export interface AppStrings {
   scoreEstimated: string;
   scoreUnavailable: string;
   notProductCode: string;
+  qrIsLink: string;
   disclaimer: string;
   recentScans: string;
   clearHistory: string;
@@ -141,6 +142,7 @@ export const strings: Record<string, AppStrings> = {
     scoreEstimated: "Εκτίμηση AI",
     scoreUnavailable: "Η βαθμολογία δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκίμασε ξανά σε λίγο.",
     notProductCode: "Αυτός ο κωδικός δεν είναι προϊόντος. Δοκίμασε άλλον.",
+    qrIsLink: "Αυτό το QR είναι link. Σκάναρε το barcode με τις γραμμές.",
     recentScans: "Πρόσφατες σαρώσεις",
     clearHistory: "Καθαρισμός",
     disclaimer: "Μόνο ενδεικτικά, όχι ιατρική συμβουλή. Η βαθμολογία βασίζεται στο Nutri-Score όταν υπάρχει, αλλιώς σε εκτίμηση AI.",
@@ -215,6 +217,7 @@ export const strings: Record<string, AppStrings> = {
     scoreEstimated: "AI estimate",
     scoreUnavailable: "The score is not available right now. Try again in a moment.",
     notProductCode: "This code is not a product barcode. Try another one.",
+    qrIsLink: "This QR is a website link. Scan the barcode with lines.",
     recentScans: "Recent scans",
     clearHistory: "Clear",
     disclaimer: "For guidance only, not medical advice. Scores come from Nutri-Score data when available, otherwise from an AI estimate.",

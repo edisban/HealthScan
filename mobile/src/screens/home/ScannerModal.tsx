@@ -5,7 +5,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "@/components/ui";
 import type { AppStrings } from "@/constants/strings";
-import { extractProductCode, SCANNED_BARCODE_TYPES } from "@/utils/barcode";
+import { extractProductCode, isWebLink, SCANNED_BARCODE_TYPES } from "@/utils/barcode";
 import { FRAME_H, styles } from "./styles";
 
 interface ScannerModalProps {
@@ -17,13 +17,14 @@ interface ScannerModalProps {
   onBarcodeScanned: (productCode: string) => void;
 }
 
-// How long "not a product barcode" stays on screen before the next code is read
-const NOT_PRODUCT_PAUSE_MS = 2500;
+// How long the "not a product barcode" hint stays on screen after the camera last saw such a code
+const NOTICE_MS = 2500;
 
 export const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarcodeScanned }: ScannerModalProps) => {
   const [scanned, setScanned] = useState(false);
-  const [notProduct, setNotProduct] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const notProductTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastIgnored = useRef("");
   // The camera fires several events per barcode before state updates; a ref blocks the repeats immediately
   const scannedRef = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -49,26 +50,31 @@ export const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarc
     if (visible) {
       scannedRef.current = false;
       setScanned(false);
-      setNotProduct(false);
+      setNotice(null);
+      lastIgnored.current = "";
     }
     return () => {
       if (notProductTimer.current) clearTimeout(notProductTimer.current);
     };
   }, [visible]);
 
-  const handleScan = ({ data }: { data: string }) => {
+  const handleScan = ({ type, data }: { type: string; data: string }) => {
     if (!data || scannedRef.current) return;
-    scannedRef.current = true;
     const productCode = extractProductCode(data);
     if (!productCode) {
-      // A code without a product, e.g. a website QR: say so, then keep scanning
-      setNotProduct(true);
-      notProductTimer.current = setTimeout(() => {
-        scannedRef.current = false;
-        setNotProduct(false);
-      }, NOT_PRODUCT_PAUSE_MS);
+      // A code without a product, e.g. a marketing QR next to the barcode: show a hint but keep
+      // scanning, so the product barcode in the same frame is still read
+      if (__DEV__ && lastIgnored.current !== data) {
+        // Development only: shows in the Expo terminal what the camera read, to support new code formats
+        console.log("[scanner] not a product code", type, JSON.stringify(data));
+      }
+      lastIgnored.current = data;
+      setNotice(isWebLink(data) ? strings.qrIsLink : strings.notProductCode);
+      if (notProductTimer.current) clearTimeout(notProductTimer.current);
+      notProductTimer.current = setTimeout(() => setNotice(null), NOTICE_MS);
       return;
     }
+    scannedRef.current = true;
     setScanned(true);
     onBarcodeScanned(productCode);
   };
@@ -103,7 +109,7 @@ export const ScannerModal = ({ visible, granted, strings, onRequestClose, onBarc
                 <View style={styles.hintPill}>
                   <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
                   <Ionicons name="barcode-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
-                  <Text style={styles.hintText}>{notProduct ? strings.notProductCode : strings.hint}</Text>
+                  <Text style={styles.hintText}>{notice ?? strings.hint}</Text>
                 </View>
               </View>
             </View>
