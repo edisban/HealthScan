@@ -20,3 +20,6 @@ venv/
 
 # Mobile (Expo) - see also mobile/.gitignore
 node_modules/
+
+# Local notes, kept on this machine only
+CLAUDE.md
