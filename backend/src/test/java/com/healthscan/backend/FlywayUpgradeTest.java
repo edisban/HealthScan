@@ -18,14 +18,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * The first migration must upgrade a database that Hibernate's ddl-auto created before Flyway,
- * including one from before the score columns existed, without losing rows.
+ * The migrations must upgrade a database that Hibernate's ddl-auto created before Flyway,
+ * including one from before the score columns existed, without losing rows or analyses.
  */
 @Testcontainers(disabledWithoutDocker = true)
 class FlywayUpgradeTest {
 
     @Container
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
+
+    private static final String DROP_ALL =
+            "DROP TABLE IF EXISTS product_analysis, products, web_search_misses, flyway_schema_history";
 
     // What ddl-auto=update created before calculated scores and the web search memory
     private static final String OLD_SCHEMA = """
@@ -35,7 +38,9 @@ class FlywayUpgradeTest {
                 cons_json text, explanation varchar(2000), health_score integer, image_url varchar(255),
                 ingredients_json text, ingredients_text varchar(4000), lang varchar(255), name varchar(255),
                 nutrition varchar(2000), origin varchar(255), pros_json text, source varchar(255));
-            INSERT INTO products (barcode, name, health_score, lang) VALUES ('3017620422003', 'Nutella', 15, 'en');
+            INSERT INTO products (barcode, name, health_score, lang, pros_json)
+                VALUES ('3017620422003', 'Nutella', 15, 'en', '["Tasty"]');
+            INSERT INTO products (barcode, name) VALUES ('5449000000996', 'Cola');
             """;
 
     private static Connection connect() throws SQLException {
@@ -63,19 +68,30 @@ class FlywayUpgradeTest {
     @Test
     void upgradesAnOldHibernateSchemaWithoutLosingRows() throws SQLException {
         try (Connection c = connect(); Statement st = c.createStatement()) {
-            st.execute("DROP TABLE IF EXISTS products, web_search_misses, flyway_schema_history");
+            st.execute(DROP_ALL);
             st.execute(OLD_SCHEMA);
         }
 
         flyway().migrate();
 
         try (Connection c = connect(); Statement st = c.createStatement()) {
-            assertThat(columns(st, "products")).contains("nutri_score", "nova_group", "additives_count", "score_source");
+            assertThat(columns(st, "products")).contains("nutri_score", "nova_group", "additives_count")
+                    .doesNotContain("lang", "health_score", "explanation");
             assertThat(columns(st, "web_search_misses")).containsExactlyInAnyOrder("barcode", "searched_at");
-            try (ResultSet rs = st.executeQuery("SELECT name, health_score FROM products WHERE barcode = '3017620422003'")) {
+            try (ResultSet rs = st.executeQuery("SELECT count(*) FROM products")) {
+                rs.next();
+                assertThat(rs.getInt(1)).isEqualTo(2);
+            }
+            // The one analysis moved to its own table; the product without a score has none
+            try (ResultSet rs = st.executeQuery("""
+                    SELECT p.name, a.lang, a.health_score, a.pros_json
+                    FROM product_analysis a JOIN products p ON p.id = a.product_id""")) {
                 assertThat(rs.next()).isTrue();
                 assertThat(rs.getString("name")).isEqualTo("Nutella");
+                assertThat(rs.getString("lang")).isEqualTo("en");
                 assertThat(rs.getInt("health_score")).isEqualTo(15);
+                assertThat(rs.getString("pros_json")).isEqualTo("[\"Tasty\"]");
+                assertThat(rs.next()).isFalse();
             }
             // The old unique constraint still holds
             assertThatThrownBy(() -> st.execute("INSERT INTO products (barcode) VALUES ('3017620422003')"))
@@ -86,7 +102,7 @@ class FlywayUpgradeTest {
     @Test
     void runningAgainChangesNothing() throws SQLException {
         try (Connection c = connect(); Statement st = c.createStatement()) {
-            st.execute("DROP TABLE IF EXISTS products, web_search_misses, flyway_schema_history");
+            st.execute(DROP_ALL);
         }
         flyway().migrate();
 

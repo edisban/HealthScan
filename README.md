@@ -8,15 +8,13 @@ https://github.com/user-attachments/assets/57bef57b-972d-4156-814f-83422aab4ddb
 ![Expo](https://img.shields.io/badge/Expo-SDK_58-000020?logo=expo&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3-6DB33F?logo=springboot&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?logo=fastapi&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.162-009688?logo=fastapi&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![CI](https://github.com/edisban/HealthScan/actions/workflows/ci.yml/badge.svg)
 
 **Know what you eat and use, in seconds.**
 
 Health Scan is a mobile app that scans product barcodes and fruit photos and tells you how healthy they are. Scan food, cosmetics and other everyday products for a 0–100 health score with positives, negatives and ingredients, or photograph a fruit to check whether it is fresh or spoiled.
-
-<!-- Demo video or screenshots -->
 
 ## Features
 
@@ -42,9 +40,9 @@ flowchart LR
 In production the phone reaches the backend only through Nginx over HTTPS; during development it talks to the backend directly on the local Wi-Fi.
 
 1. The app reads the barcode and asks the backend.
-2. The backend answers from its PostgreSQL cache, or looks the barcode up in five free product databases, cheapest first.
+2. The backend answers from its PostgreSQL cache, or asks the three Open Facts databases at once and, only if they all miss, UPCitemdb and USDA, whose free quotas are small.
 3. The score is calculated from the product's Nutri-Score grade (A 90, B 72, C 55, D 35, E 15), minus 10 for ultra-processed (NOVA 4) or 5 for processed (NOVA 3), minus 2 per additive up to 10.
-4. The AI service asks an LLM on Groq to explain the score, and the result is cached so the next scan is instant.
+4. The AI service asks an LLM on Groq to explain the score. The analysis is cached per language, so the next scan is instant and switching between Greek and English only asks the AI.
 
 The phone only talks to the backend, and only the AI service holds the Groq key.
 
@@ -54,7 +52,7 @@ The phone only talks to the backend, and only the AI service holds the Groq key.
 |------|-------|
 | Mobile | React Native 0.88, Expo SDK 58, TypeScript, AsyncStorage |
 | Backend | Java 17, Spring Boot 3.3, Spring Data JPA, Flyway, Bucket4j |
-| AI service | Python 3.11, FastAPI, Pydantic, Groq (`gpt-oss-20b`, `qwen3.8-27b` vision) |
+| AI service | Python 3.11, FastAPI (async), Pydantic, Groq (`gpt-oss-20b`, `qwen3.8-27b` vision) |
 | Data | PostgreSQL 16, Open Food / Beauty / Products Facts, UPCitemdb, USDA FoodData Central |
 | Infrastructure | Docker Compose, Nginx + Certbot (HTTPS), GitHub Actions |
 
@@ -79,11 +77,12 @@ For a public server, `docker compose --profile https up -d` puts Nginx in front 
 | `POSTGRES_PASSWORD` | Yes | Database password |
 | `AI_SHARED_SECRET` | Yes | Secret between backend and AI service (`openssl rand -hex 32`) |
 | `API_KEY` | No | Requires `X-Api-Key` on the API; the app sends `EXPO_PUBLIC_API_KEY` |
+| `USDA_API_KEY` | No | Free USDA FoodData Central key; the low-limit `DEMO_KEY` otherwise |
 | `EXPO_PUBLIC_API_BASE` | Yes, in `mobile/.env` | Backend URL the phone can reach |
 
 ## Security
 
-- Input validation (`400`), an 8 MB upload limit (`413`), and per-IP rate limits with Bucket4j (`429` with `Retry-After`), stricter on the endpoints that call Groq.
+- Input validation (`400`), an 8 MB upload limit (`413`), and per-IP rate limits with Bucket4j (`429` with `Retry-After`), stricter on the endpoints that call Groq. The client address comes from `X-Forwarded-For` only when Nginx sends it, so a forged header cannot get around the limit.
 - Optional API key. It ships inside the app, so it deters abuse; it is not user authentication.
 - Only the backend is published. PostgreSQL and the AI service stay on the internal network, and the AI service requires a shared secret.
 - Containers run as a non-root user, AI replies are validated before use, and errors are RFC 9457 problem JSON.
@@ -94,8 +93,8 @@ For a public server, `docker compose --profile https up -d` puts Nginx in front 
 
 | Suite | Tests | Tools |
 |-------|-------|-------|
-| Backend | 119 | JUnit 5, Mockito, MockMvc, Testcontainers (real PostgreSQL), JaCoCo 80% gate |
-| AI service | 46 | pytest with a fake Groq client |
+| Backend | 135 | JUnit 5, Mockito, MockMvc, Testcontainers (real PostgreSQL), JaCoCo 80% gate |
+| AI service | 54 | pytest with a fake Groq client |
 | Mobile | 61 | Jest, React Native Testing Library |
 | End-to-end | 21 | Playwright: API security checks, and the app's screens run in a browser |
 

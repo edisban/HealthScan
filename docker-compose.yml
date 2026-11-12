@@ -50,8 +50,10 @@ services:
       - API_KEY=${API_KEY:-}
       # Only for the web version of the app, e.g. http://localhost:8081
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
-      # "native" behind the HTTPS proxy: the client IP comes from X-Forwarded-For, set by the proxy
-      - SERVER_FORWARD_HEADERS_STRATEGY=${FORWARD_HEADERS_STRATEGY:-none}
+      # The client address comes from X-Forwarded-For only when the request comes from the HTTPS proxy
+      # (its fixed address below); anyone else's header is ignored, so it cannot dodge the rate limit
+      - SERVER_FORWARD_HEADERS_STRATEGY=native
+      - SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES=172\.31\.250\.10
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,6 +96,10 @@ services:
       - "${HTTPS_PORT:-443}:443"
     environment:
       - DOMAIN=${DOMAIN:-localhost}
+    networks:
+      default:
+        # The one address the backend trusts for X-Forwarded-For
+        ipv4_address: 172.31.250.10
     volumes:
       - certs:/etc/letsencrypt:ro
       - acme:/var/www/certbot:ro
@@ -103,6 +109,14 @@ services:
       certbot:
         condition: service_healthy
     restart: unless-stopped
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
+          # Docker picks container addresses from the upper half, so none can take the proxy's
+          ip_range: 172.31.250.128/25
 
 volumes:
   pgdata:

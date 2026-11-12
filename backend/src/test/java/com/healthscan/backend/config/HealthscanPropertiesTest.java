@@ -25,6 +25,7 @@ class HealthscanPropertiesTest {
             assertThat(properties.rateLimit().relaxedPerMinute()).isEqualTo(60);
             assertThat(properties.apiKey()).isEmpty();
             assertThat(properties.aiSharedSecret()).isEmpty();
+            assertThat(properties.usdaApiKey()).isEqualTo("DEMO_KEY");
         });
     }
 
@@ -34,7 +35,8 @@ class HealthscanPropertiesTest {
                         "healthscan.max-image-size=2MB",
                         "healthscan.rate-limit.strict-per-minute=3",
                         "healthscan.api-key=k",
-                        "healthscan.ai-service-url=http://ai-service:8000")
+                        "healthscan.ai-service-url=http://ai-service:8000",
+                        "healthscan.usda-api-key=my-key")
                 .run(context -> {
                     HealthscanProperties properties = context.getBean(HealthscanProperties.class);
                     assertThat(properties.maxImageSize()).isEqualTo(DataSize.ofMegabytes(2));
@@ -42,6 +44,7 @@ class HealthscanPropertiesTest {
                     assertThat(properties.rateLimit().relaxedPerMinute()).isEqualTo(60);
                     assertThat(properties.apiKey()).isEqualTo("k");
                     assertThat(properties.aiServiceUrl()).isEqualTo("http://ai-service:8000");
+                    assertThat(properties.usdaApiKey()).isEqualTo("my-key");
                 });
     }
 }

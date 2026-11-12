@@ -2,7 +2,9 @@ package com.healthscan.backend.service;
 
 import com.healthscan.backend.dto.ProductResponse;
 import com.healthscan.backend.entity.Product;
+import com.healthscan.backend.entity.ProductAnalysis;
 import com.healthscan.backend.entity.WebSearchMiss;
+import com.healthscan.backend.repository.ProductAnalysisRepository;
 import com.healthscan.backend.repository.ProductRepository;
 import com.healthscan.backend.repository.WebSearchMissRepository;
 import com.healthscan.backend.service.ProductLookupService.ProductInfo;
@@ -11,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
@@ -25,6 +28,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -42,6 +47,7 @@ class ProductServiceTest {
             {"found":true,"productName":"Yogurt","brand":"Fage","ingredients":"milk"}""";
 
     private final ProductRepository repo = mock(ProductRepository.class);
+    private final ProductAnalysisRepository analysisRepo = mock(ProductAnalysisRepository.class);
     private final WebSearchMissRepository missRepo = mock(WebSearchMissRepository.class);
     private final ProductLookupService lookup = mock(ProductLookupService.class);
 
@@ -61,23 +67,37 @@ class ProductServiceTest {
             return Mono.just(ClientResponse.create(HttpStatus.OK)
                     .header("Content-Type", "application/json").body(reply).build());
         }).build();
-        service = new ProductService(repo, missRepo, lookup, ai);
+        // Like the database: saving gives the product an id
+        when(repo.save(any())).thenAnswer(call -> withId(call.getArgument(0)));
+        service = new ProductService(repo, analysisRepo, missRepo, lookup, ai);
     }
 
-    private static Product row(Integer score, String lang, String source) {
+    private static Product withId(Product product) {
+        ReflectionTestUtils.setField(product, "id", 1L);
+        return product;
+    }
+
+    /** A product already in the database, from the given source. */
+    private Product givenRow(String source) {
         Product product = new Product();
         product.setBarcode(BARCODE);
         product.setName("Saved name");
         product.setIngredientsText("saved ingredients");
-        product.setHealthScore(score);
-        product.setLang(lang);
         product.setSource(source);
-        product.setScoreSource("AI estimate");
+        withId(product);
+        when(repo.findByBarcode(BARCODE)).thenReturn(Optional.of(product));
         return product;
     }
 
-    private void givenRow(Product product) {
-        when(repo.findByBarcode(BARCODE)).thenReturn(Optional.of(product));
+    /** A stored analysis of the product in one language. */
+    private ProductAnalysis givenAnalysis(Product product, String lang, Integer score, String scoreSource) {
+        ProductAnalysis analysis = new ProductAnalysis(product, lang);
+        analysis.setHealthScore(score);
+        analysis.setScoreSource(scoreSource);
+        analysis.setExplanation("Saved explanation");
+        when(analysisRepo.findByProductAndLang(any(), eq(lang))).thenReturn(Optional.of(analysis));
+        if (scoreSource != null) when(analysisRepo.existsByProductAndScoreSourceIsNotNull(any())).thenReturn(true);
+        return analysis;
     }
 
     private void givenDatabaseHit() {
@@ -90,30 +110,54 @@ class ProductServiceTest {
         return saved.getValue();
     }
 
+    private ProductAnalysis savedAnalysis() {
+        ArgumentCaptor<ProductAnalysis> saved = ArgumentCaptor.forClass(ProductAnalysis.class);
+        verify(analysisRepo).save(saved.capture());
+        return saved.getValue();
+    }
+
     @Test
-    void scoredRowInSameLanguageIsServedWithoutExternalCalls() {
-        givenRow(row(40, "en", "Open Food Facts"));
+    void scoredAnalysisInSameLanguageIsServedWithoutExternalCalls() {
+        givenAnalysis(givenRow("Open Food Facts"), "en", 40, "AI estimate");
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(40);
+        assertThat(response.healthScore()).isEqualTo(40);
+        assertThat(response.explanation()).isEqualTo("Saved explanation");
         verify(lookup, never()).lookup(any());
         assertThat(aiCalls).isEmpty();
     }
 
     @Test
-    void rowSavedBeforeCalculatedScoresIsAnalyzedAgain() {
-        Product old = row(40, "en", "Open Food Facts");
-        old.setScoreSource(null);
-        givenRow(old);
+    void languageSwitchAsksOnlyTheAiAndKeepsBothLanguages() {
+        givenAnalysis(givenRow("Open Food Facts"), "en", 40, "AI estimate");
+        aiReplies.put("/analyze", ANALYSIS);
+
+        ProductResponse response = service.analyzeProduct(BARCODE, "el");
+
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(response.name()).isEqualTo("Saved name");
+        verify(lookup, never()).lookup(any());
+        assertThat(aiCalls).containsExactly("/analyze");
+        // A new row for Greek; the English one is left as it was
+        assertThat(savedAnalysis().getLang()).isEqualTo("el");
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void productSavedBeforeCalculatedScoresIsLookedUpAgain() {
+        ProductAnalysis old = givenAnalysis(givenRow("Open Food Facts"), "en", 40, null);
         when(lookup.lookup(BARCODE)).thenReturn(
                 new ProductInfo("Db name", "Fage", "", "milk", "Open Food Facts", "b", 1, 0));
         aiReplies.put("/analyze", ANALYSIS);
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(72);
-        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(response.scoreSource()).isEqualTo("Nutri-Score");
+        assertThat(savedProduct().getNutriScore()).isEqualTo("b");
+        // The old analysis is updated in place, not duplicated
+        assertThat(savedAnalysis()).isSameAs(old);
     }
 
     @Test
@@ -123,81 +167,91 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.isFound()).isTrue();
-        assertThat(response.getHealthScore()).isEqualTo(72);
-        assertThat(response.getSource()).isEqualTo("Open Food Facts");
-        assertThat(response.getPros()).containsExactly("Protein");
-        Product saved = savedProduct();
-        assertThat(saved.getLang()).isEqualTo("en");
-        assertThat(saved.getProsJson()).isEqualTo("[\"Protein\"]");
+        assertThat(response.found()).isTrue();
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(response.source()).isEqualTo("Open Food Facts");
+        assertThat(response.pros()).containsExactly("Protein");
+        assertThat(savedProduct().getName()).isEqualTo("Db name");
+        ProductAnalysis analysis = savedAnalysis();
+        assertThat(analysis.getLang()).isEqualTo("en");
+        assertThat(analysis.getProsJson()).isEqualTo("[\"Protein\"]");
+        assertThat(analysis.getAnalyzedAt()).isNotNull();
     }
 
     @Test
-    void rowWithoutScoreIsAnalyzedAgain() {
-        givenRow(row(null, null, "Open Food Facts"));
+    void productWhoseAnalysisFailedIsAnalyzedAgain() {
+        givenRow("Open Food Facts");
         givenDatabaseHit();
         aiReplies.put("/analyze", ANALYSIS);
 
-        assertThat(service.analyzeProduct(BARCODE, "en").getHealthScore()).isEqualTo(72);
-    }
-
-    @Test
-    void rowInOtherLanguageIsAnalyzedAgain() {
-        givenRow(row(40, "en", "Open Food Facts"));
-        givenDatabaseHit();
-        aiReplies.put("/analyze", ANALYSIS);
-
-        service.analyzeProduct(BARCODE, "el");
-
-        assertThat(savedProduct().getLang()).isEqualTo("el");
+        assertThat(service.analyzeProduct(BARCODE, "en").healthScore()).isEqualTo(72);
     }
 
     @Test
     void labelPhotoProductSurvivesALanguageChange() {
-        givenRow(row(40, "en", "Label photo"));
+        givenAnalysis(givenRow("Label photo"), "en", 40, "AI estimate");
         aiReplies.put("/analyze", ANALYSIS);
 
         ProductResponse response = service.analyzeProduct(BARCODE, "el");
 
-        assertThat(response.isFound()).isTrue();
-        assertThat(response.getName()).isEqualTo("Saved name");
-        assertThat(response.getSource()).isEqualTo("Label photo");
-        assertThat(savedProduct().getIngredientsText()).isEqualTo("saved ingredients");
-    }
-
-    @Test
-    void unknownBarcodeIsNotFoundAndNotSaved() {
-        assertThat(service.analyzeProduct(BARCODE, "en").isFound()).isFalse();
+        assertThat(response.found()).isTrue();
+        assertThat(response.name()).isEqualTo("Saved name");
+        assertThat(response.source()).isEqualTo("Label photo");
+        verify(lookup, never()).lookup(any());
         verify(repo, never()).save(any());
     }
 
     @Test
-    void aiOutageSavesTheRowWithoutAScore() {
+    void unknownBarcodeIsNotFoundAndNotSaved() {
+        assertThat(service.analyzeProduct(BARCODE, "en").found()).isFalse();
+        verify(repo, never()).save(any());
+        verify(analysisRepo, never()).save(any());
+    }
+
+    @Test
+    void aiOutageKeepsTheProductButStoresNoAnalysis() {
         givenDatabaseHit();
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.isFound()).isTrue();
-        assertThat(response.getHealthScore()).isNull();
-        assertThat(savedProduct().getHealthScore()).isNull();
+        assertThat(response.found()).isTrue();
+        assertThat(response.healthScore()).isNull();
+        assertThat(savedProduct().getName()).isEqualTo("Db name");
+        verify(analysisRepo, never()).save(any());
     }
 
     @Test
-    void concurrentInsertStillReturnsTheAnalysis() {
+    void concurrentProductInsertStillReturnsTheAnalysis() {
+        Product other = new Product();
+        other.setBarcode(BARCODE);
+        other.setName("Db name");
+        withId(other);
+        // The first look finds nothing; after the duplicate insert the other request's row is there
+        when(repo.findByBarcode(BARCODE)).thenReturn(Optional.empty(), Optional.of(other));
+        doThrow(new DataIntegrityViolationException("duplicate barcode")).when(repo).save(any());
         givenDatabaseHit();
         aiReplies.put("/analyze", ANALYSIS);
-        when(repo.save(any())).thenThrow(new DataIntegrityViolationException("duplicate barcode"));
 
-        assertThat(service.analyzeProduct(BARCODE, "en").getHealthScore()).isEqualTo(72);
+        assertThat(service.analyzeProduct(BARCODE, "en").healthScore()).isEqualTo(72);
+        assertThat(savedAnalysis().getProduct()).isSameAs(other);
+    }
+
+    @Test
+    void concurrentAnalysisInTheSameLanguageStillReturnsIt() {
+        givenDatabaseHit();
+        aiReplies.put("/analyze", ANALYSIS);
+        when(analysisRepo.save(any())).thenThrow(new DataIntegrityViolationException("duplicate language"));
+
+        assertThat(service.analyzeProduct(BARCODE, "en").healthScore()).isEqualTo(72);
     }
 
     @Test
     void webSearchNeverReplacesAnExistingRow() {
-        givenRow(row(40, "en", "Label photo"));
+        givenAnalysis(givenRow("Label photo"), "en", 40, "AI estimate");
 
         ProductResponse response = service.searchWeb(BARCODE, "en");
 
-        assertThat(response.getSource()).isEqualTo("Label photo");
+        assertThat(response.source()).isEqualTo("Label photo");
         assertThat(aiCalls).doesNotContain("/search-product");
     }
 
@@ -208,8 +262,8 @@ class ProductServiceTest {
 
         ProductResponse response = service.searchWeb(BARCODE, "en");
 
-        assertThat(response.getName()).isEqualTo("Yogurt");
-        assertThat(response.getSource()).isEqualTo("Web search");
+        assertThat(response.name()).isEqualTo("Yogurt");
+        assertThat(response.source()).isEqualTo("Web search");
         assertThat(aiCalls).containsExactly("/search-product", "/analyze");
         verify(missRepo, never()).save(any());
     }
@@ -218,7 +272,7 @@ class ProductServiceTest {
     void webSearchNoMatchIsRemembered() {
         aiReplies.put("/search-product", NO_MATCH);
 
-        assertThat(service.searchWeb(BARCODE, "en").isFound()).isFalse();
+        assertThat(service.searchWeb(BARCODE, "en").found()).isFalse();
 
         ArgumentCaptor<WebSearchMiss> miss = ArgumentCaptor.forClass(WebSearchMiss.class);
         verify(missRepo).save(miss.capture());
@@ -230,7 +284,7 @@ class ProductServiceTest {
         Instant anHourAgo = Instant.now().minus(Duration.ofHours(1));
         when(missRepo.findById(BARCODE)).thenReturn(Optional.of(new WebSearchMiss(BARCODE, anHourAgo)));
 
-        assertThat(service.searchWeb(BARCODE, "en").isFound()).isFalse();
+        assertThat(service.searchWeb(BARCODE, "en").found()).isFalse();
         assertThat(aiCalls).isEmpty();
     }
 
@@ -247,7 +301,7 @@ class ProductServiceTest {
 
     @Test
     void aiOutageDuringSearchIsNotRememberedAsAMiss() {
-        assertThat(service.searchWeb(BARCODE, "en").isFound()).isFalse();
+        assertThat(service.searchWeb(BARCODE, "en").found()).isFalse();
         verify(missRepo, never()).save(any());
     }
 
@@ -258,8 +312,9 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en");
 
-        assertThat(response.getSource()).isEqualTo("Label photo");
-        assertThat(response.getHealthScore()).isEqualTo(72);
+        assertThat(response.source()).isEqualTo("Label photo");
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(savedProduct().getSource()).isEqualTo("Label photo");
     }
 
     @Test
@@ -271,11 +326,12 @@ class ProductServiceTest {
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
         // 55 for grade C, minus 10 for NOVA 4, minus 6 for three additives; the AI said 72
-        assertThat(response.getHealthScore()).isEqualTo(39);
-        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
-        assertThat(response.getNutriScore()).isEqualTo("c");
-        assertThat(response.getNovaGroup()).isEqualTo(4);
-        assertThat(response.getExplanation()).isEqualTo("Fine");
+        assertThat(response.healthScore()).isEqualTo(39);
+        assertThat(response.scoreSource()).isEqualTo("Nutri-Score");
+        assertThat(response.nutriScore()).isEqualTo("c");
+        assertThat(response.novaGroup()).isEqualTo(4);
+        assertThat(response.explanation()).isEqualTo("Fine");
+        assertThat(savedAnalysis().getHealthScore()).isEqualTo(39);
     }
 
     @Test
@@ -285,10 +341,10 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(90);
-        assertThat(response.getScoreSource()).isEqualTo("Nutri-Score");
-        // No language is stored, so the next scan asks the AI again for the text
-        assertThat(savedProduct().getLang()).isNull();
+        assertThat(response.healthScore()).isEqualTo(90);
+        assertThat(response.scoreSource()).isEqualTo("Nutri-Score");
+        // Nothing is stored for the language, so the next scan asks the AI again for the text
+        verify(analysisRepo, never()).save(any());
     }
 
     @Test
@@ -298,19 +354,19 @@ class ProductServiceTest {
 
         ProductResponse response = service.analyzeProduct(BARCODE, "en");
 
-        assertThat(response.getHealthScore()).isEqualTo(72);
-        assertThat(response.getScoreSource()).isEqualTo("AI estimate");
+        assertThat(response.healthScore()).isEqualTo(72);
+        assertThat(response.scoreSource()).isEqualTo("AI estimate");
     }
 
     @Test
     void labelPhotoNeverReplacesAnExistingProduct() {
-        givenRow(row(40, "en", "Open Food Facts"));
+        givenAnalysis(givenRow("Open Food Facts"), "en", 40, "AI estimate");
         aiReplies.put("/read-label", IDENTIFIED);
 
         ProductResponse response = service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en");
 
-        assertThat(response.getSource()).isEqualTo("Open Food Facts");
-        assertThat(response.getName()).isEqualTo("Saved name");
+        assertThat(response.source()).isEqualTo("Open Food Facts");
+        assertThat(response.name()).isEqualTo("Saved name");
         assertThat(aiCalls).doesNotContain("/read-label");
         verify(repo, never()).save(any());
     }
@@ -319,7 +375,7 @@ class ProductServiceTest {
     void unreadableLabelIsNotFound() {
         aiReplies.put("/read-label", NO_MATCH);
 
-        assertThat(service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en").isFound()).isFalse();
+        assertThat(service.analyzeLabel(BARCODE, new byte[] {1, 2, 3}, "en").found()).isFalse();
         verify(repo, never()).save(any());
     }
 }

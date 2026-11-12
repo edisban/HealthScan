@@ -17,7 +17,9 @@ public record HealthscanProperties(
         // Sent to the AI service in X-Internal-Secret; empty sends nothing
         @DefaultValue("") String aiSharedSecret,
         // Origins of the web app allowed to call /api/** from a browser; empty turns CORS off
-        @DefaultValue List<String> corsAllowedOrigins) {
+        @DefaultValue List<String> corsAllowedOrigins,
+        // USDA FoodData Central key for the last product lookup; DEMO_KEY has a low hourly limit
+        @DefaultValue("DEMO_KEY") String usdaApiKey) {
 
     /** Requests per minute per client IP; "strict" covers the endpoints that call Groq. */
     public record RateLimit(@DefaultValue("10") int strictPerMinute,

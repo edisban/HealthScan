@@ -1,14 +1,4 @@
 package com.healthscan.backend.dto;
 
-public class ImageAnalysisBase64Request {
-    private String image;
-
-    public ImageAnalysisBase64Request() {}
-
-    public ImageAnalysisBase64Request(String image) {
-        this.image = image;
-    }
-
-    public String getImage() { return image; }
-    public void setImage(String image) { this.image = image; }
-}
+/** Body of the base64 upload endpoints: the photo as base64 text or a data URL. */
+public record ImageAnalysisBase64Request(String image) {}

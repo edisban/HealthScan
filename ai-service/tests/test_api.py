@@ -2,50 +2,18 @@ import base64
 import inspect
 import io
 import json
-from types import SimpleNamespace
+import time
+from concurrent.futures import ThreadPoolExecutor
 
+import httpx
+import openai
 import pytest
-from fastapi.testclient import TestClient
 from PIL import Image
 
-import main
-
-
-class FakeGroq:
-    """Stands in for the OpenAI client: records each request and returns a canned reply."""
-
-    def __init__(self):
-        self.reply = "{}"
-        self.requests = []
-        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
-
-    def _create(self, **kwargs):
-        self.requests.append(kwargs)
-        message = SimpleNamespace(content=self.reply)
-        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
-
-
-@pytest.fixture
-def groq(monkeypatch):
-    fake = FakeGroq()
-    monkeypatch.setattr(main, "client", fake)
-    return fake
-
-
-@pytest.fixture
-def no_groq(monkeypatch):
-    monkeypatch.setattr(main, "client", None)
-
-
-@pytest.fixture
-def api():
-    return TestClient(main.app)
-
-
-def jpeg(size=(64, 64)):
-    buf = io.BytesIO()
-    Image.new("RGB", size, (200, 30, 30)).save(buf, format="JPEG")
-    return {"file": ("photo.jpg", buf.getvalue(), "image/jpeg")}
+from app import config, routes
+from app.llm import make_client
+from app.mock_ai import MockGroq
+from conftest import jpeg
 
 
 def sent_image_size(request):
@@ -58,9 +26,78 @@ def test_health(api):
     assert api.get("/health").json() == {"status": "ok", "mock": False}
 
 
+# --- The model client ---
+
 def test_groq_calls_have_a_timeout_and_one_retry():
-    assert main.client.timeout == main.GROQ_TIMEOUT_SECONDS
-    assert main.client.max_retries == 1
+    client = make_client(mock=False, api_key="test-key")
+
+    assert isinstance(client, openai.AsyncOpenAI)
+    assert client.timeout == config.GROQ_TIMEOUT_SECONDS
+    assert client.max_retries == 1
+
+
+def test_without_a_key_there_is_no_client():
+    assert make_client(mock=False, api_key="") is None
+
+
+def test_mock_mode_needs_no_key():
+    assert isinstance(make_client(mock=True, api_key=""), MockGroq)
+
+
+@pytest.mark.parametrize("endpoint", [routes.analyze, routes.read_label, routes.search_product, routes.analyze_image])
+def test_model_calls_do_not_hold_a_thread(endpoint):
+    assert inspect.iscoroutinefunction(endpoint)
+
+
+def test_health_answers_while_a_model_call_is_slow(api, groq):
+    groq.reply = '{"healthScore": 50}'
+    groq.delay = 1.0
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        slow = pool.submit(api.post, "/analyze", json={"barcode": "1"})
+        time.sleep(0.2)  # the model call is now waiting
+        start = time.monotonic()
+        health = api.get("/health")
+        took = time.monotonic() - start
+
+        assert health.status_code == 200
+        assert took < 0.5
+        assert slow.result().status_code == 200
+
+
+def test_slow_model_calls_wait_together(api, groq):
+    groq.reply = '{"healthScore": 50}'
+    groq.delay = 0.5
+
+    start = time.monotonic()
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        replies = list(pool.map(lambda _: api.post("/analyze", json={"barcode": "1"}), range(4)))
+    took = time.monotonic() - start
+
+    assert all(reply.status_code == 200 for reply in replies)
+    # One after the other would take 2 s
+    assert took < 1.5
+
+
+# --- Groq failures ---
+
+def test_model_timeout_is_a_gateway_timeout(api, groq):
+    groq.error = openai.APITimeoutError(request=httpx.Request("POST", "https://api.groq.com"))
+
+    assert api.post("/analyze", json={"barcode": "1"}).status_code == 504
+
+
+def test_model_outage_is_a_bad_gateway(api, groq):
+    groq.error = openai.APIConnectionError(request=httpx.Request("POST", "https://api.groq.com"))
+
+    assert api.post("/analyze", json={"barcode": "1"}).status_code == 502
+
+
+def test_file_that_is_not_an_image_is_a_bad_request(api, groq):
+    response = api.post("/analyze-image", files={"file": ("photo.jpg", b"not an image", "image/jpeg")})
+
+    assert response.status_code == 400
+    assert groq.requests == []
 
 
 # --- Model replies are validated before use ---
@@ -109,9 +146,8 @@ def test_null_label_fields_are_empty_strings(api, groq):
 # --- MOCK_AI mode ---
 
 @pytest.fixture
-def mock_ai(monkeypatch):
-    from mock_ai import MockGroq
-    monkeypatch.setattr(main, "client", MockGroq())
+def mock_ai(use_client):
+    use_client(MockGroq())
 
 
 def test_mock_mode_scores_without_groq(api, mock_ai):
@@ -127,11 +163,17 @@ def test_mock_mode_answers_every_endpoint(api, mock_ai):
     assert api.post("/search-product", json={"barcode": "1"}).json()["found"] is False
 
 
-@pytest.fixture
-def shared_secret(monkeypatch):
-    monkeypatch.setattr(main, "AI_SHARED_SECRET", "s3cret")
-    return "s3cret"
+def test_mock_mode_is_made_at_start_up(monkeypatch):
+    from fastapi.testclient import TestClient
+    from app.main import app
 
+    monkeypatch.setattr(config, "MOCK_AI", True)
+    with TestClient(app) as client:
+        assert client.post("/analyze", json={"barcode": "1"}).json()["healthScore"] == 62
+        assert client.get("/health").json()["mock"] is True
+
+
+# --- Shared secret ---
 
 def test_missing_secret_is_unauthorized(api, groq, shared_secret):
     response = api.post("/analyze", json={"barcode": "1"})
@@ -141,7 +183,7 @@ def test_missing_secret_is_unauthorized(api, groq, shared_secret):
 
 
 def test_wrong_secret_is_unauthorized(api, groq, shared_secret):
-    response = api.post("/analyze", json={"barcode": "1"}, headers={main.SECRET_HEADER: "s3cre7"})
+    response = api.post("/analyze", json={"barcode": "1"}, headers={config.SECRET_HEADER: "s3cre7"})
 
     assert response.status_code == 401
     assert groq.requests == []
@@ -156,7 +198,7 @@ def test_every_model_endpoint_needs_the_secret(api, groq, shared_secret):
 def test_correct_secret_is_accepted(api, groq, shared_secret):
     groq.reply = '{"healthScore": 50, "summary": ""}'
 
-    response = api.post("/analyze", json={"barcode": "1"}, headers={main.SECRET_HEADER: shared_secret})
+    response = api.post("/analyze", json={"barcode": "1"}, headers={config.SECRET_HEADER: shared_secret})
 
     assert response.status_code == 200
 
@@ -165,10 +207,7 @@ def test_health_stays_open_for_the_container_healthcheck(api, shared_secret):
     assert api.get("/health").status_code == 200
 
 
-@pytest.mark.parametrize("endpoint", [main.read_label, main.analyze_image, main.search_product, main.analyze])
-def test_model_calls_stay_off_the_event_loop(endpoint):
-    assert not inspect.iscoroutinefunction(endpoint)
-
+# --- /analyze ---
 
 def test_analyze_returns_the_model_fields(api, groq):
     groq.reply = json.dumps({
@@ -236,9 +275,11 @@ def test_without_a_fixed_score_the_model_scores(api, groq):
     assert "fixed at" not in groq.requests[0]["messages"][1]["content"]
 
 
-def test_analyze_without_a_key_is_unavailable(api, no_groq):
+def test_analyze_without_a_key_is_unavailable(api):
     assert api.post("/analyze", json={"barcode": "1"}).status_code == 503
 
+
+# --- /read-label ---
 
 def test_read_label_found(api, groq):
     groq.reply = '{"readable": true, "productName": " Yogurt ", "brand": "Fage", "ingredients": "milk"}'
@@ -267,6 +308,8 @@ def test_read_label_keeps_small_print_up_to_1600_px(api, groq):
 
     assert sent_image_size(groq.requests[0]) == (1600, 1600)
 
+
+# --- /search-product ---
 
 def test_search_extracts_json_from_prose(api, groq):
     groq.reply = 'I found it. {"found": true, "productName": "Yogurt", "brand": "Fage"} Hope that helps.'
@@ -297,6 +340,8 @@ def test_search_match_without_a_name_is_not_found(api, groq):
 
     assert api.post("/search-product", json={"barcode": "1"}).json()["found"] is False
 
+
+# --- /analyze-image ---
 
 def test_fruit_is_identified_and_rated(api, groq):
     groq.reply = '{"isFruit": true, "fruitName": "Kiwi", "quality": "good", "confidence": 91, "summary": "Fresh"}'
@@ -364,5 +409,5 @@ def test_fruit_photo_is_reduced_to_1024_px(api, groq):
     assert sent_image_size(groq.requests[0]) == (1024, 1024)
 
 
-def test_fruit_without_a_key_is_unavailable(api, no_groq):
+def test_fruit_without_a_key_is_unavailable(api):
     assert api.post("/analyze-image", files=jpeg()).status_code == 503

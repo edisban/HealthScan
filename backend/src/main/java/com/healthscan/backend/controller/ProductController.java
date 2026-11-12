@@ -7,12 +7,16 @@ import com.healthscan.backend.dto.ProductResponse;
 import com.healthscan.backend.service.ImageAnalysisService;
 import com.healthscan.backend.service.ProductService;
 import com.healthscan.backend.web.Base64Image;
+import com.healthscan.backend.web.ImageTooLargeException;
+import com.healthscan.backend.web.InvalidImageException;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/v1")
@@ -48,7 +52,7 @@ public class ProductController {
             @PathVariable @Pattern(regexp = BARCODE, message = BARCODE_MESSAGE) String barcode,
             @RequestParam(defaultValue = "el") @Pattern(regexp = LANG, message = LANG_MESSAGE) String lang,
             @RequestBody ImageAnalysisBase64Request req) {
-        byte[] image = Base64Image.decode(req.getImage(), maxImageBytes);
+        byte[] image = Base64Image.decode(req.image(), maxImageBytes);
         return ResponseEntity.ok(productService.analyzeLabel(barcode, image, lang));
     }
 
@@ -60,20 +64,27 @@ public class ProductController {
         return ResponseEntity.ok(productService.searchWeb(barcode, lang));
     }
 
+    /** Same as the base64 endpoint, for clients that upload a file. Errors are 400, 413 or 502, never a 200. */
     @PostMapping(path = "/analyze-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ImageAnalysisResponse> analyzeImage(@RequestParam("file") MultipartFile file) {
-        try {
-            ImageAnalysisResponse res = imageAnalysisService.analyzeImage(file.getBytes(), file.getOriginalFilename());
-            return ResponseEntity.ok(res);
-        } catch (Exception e) {
-            ImageAnalysisResponse fallback = new ImageAnalysisResponse(false, "", "uncertain", 0.0, "Upload failed: " + String.valueOf(e.getMessage()));
-            return ResponseEntity.ok(fallback);
+        if (file.isEmpty()) {
+            throw new InvalidImageException("No image provided");
         }
+        if (file.getSize() > maxImageBytes) {
+            throw new ImageTooLargeException("Image is larger than the upload limit");
+        }
+        byte[] image;
+        try {
+            image = file.getBytes();
+        } catch (IOException e) {
+            throw new InvalidImageException("The uploaded image could not be read");
+        }
+        return ResponseEntity.ok(imageAnalysisService.analyzeImage(image, file.getOriginalFilename()));
     }
 
     @PostMapping(path = "/analyze-image-base64", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<ImageAnalysisResponse> analyzeImageBase64(@RequestBody ImageAnalysisBase64Request req) {
-        byte[] image = Base64Image.decode(req.getImage(), maxImageBytes);
+        byte[] image = Base64Image.decode(req.image(), maxImageBytes);
         return ResponseEntity.ok(imageAnalysisService.analyzeImage(image, "photo.jpg"));
     }
 }
