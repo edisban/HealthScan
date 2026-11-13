@@ -227,7 +227,7 @@ class ProductServiceTest {
         other.setName("Db name");
         withId(other);
         // The first look finds nothing; after the duplicate insert the other request's row is there
-        when(repo.findByBarcode(BARCODE)).thenReturn(Optional.empty(), Optional.of(other));
+        when(repo.findByBarcode(BARCODE)).thenReturn(Optional.empty()).thenReturn(Optional.of(other));
         doThrow(new DataIntegrityViolationException("duplicate barcode")).when(repo).save(any());
         givenDatabaseHit();
         aiReplies.put("/analyze", ANALYSIS);
